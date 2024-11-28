@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from sklearn.metrics import roc_auc_score
-from aryaxai_xai_metrics_tabular.explainer import LIMEExplainer,SHAPExplainer
+from xai_evals.explainer import LIMEExplainer,SHAPExplainer
 
 class ExplanationMetrics:
     def __init__(self, model, explainer_name, X_train, X_test, y_test, features, task, metrics=None, start_idx=0, end_idx=None):
