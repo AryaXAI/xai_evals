@@ -67,8 +67,12 @@ class SHAPExplainer:
         else:
             pass
        
-        if isinstance(self.model, (KMeans,NearestCentroid,BaggingClassifier,VotingClassifier)):
-            raise ValueError("Model does not support SHAP explanation.")
+        if isinstance(self.model,(GradientBoostingClassifier)) and self.task == "multiclass-classification":
+            raise ValueError("SHAP explanation doesnt support SHAP for multi-class classification")
+        elif isinstance(self.model, (KMeans,NearestCentroid,BaggingClassifier,VotingClassifier)):
+            raise ValueError("SHAP explanation not supported for the Model.")
+        elif isinstance(self.model, (RidgeClassifier)):
+            raise ValueError("Model does have predict probability hence it not support SHAP explanation.")           
         elif isinstance(self.model, (HistGradientBoostingClassifier,LGBMClassifier, CatBoostClassifier,RandomForestClassifier, DecisionTreeClassifier, xgb.XGBClassifier, GradientBoostingClassifier, ExtraTreesClassifier)):
             #AdaBoostClassifier,BaggingClassifier not supported by treeshap
             self.shap_type = "Tree"
@@ -79,7 +83,7 @@ class SHAPExplainer:
         elif isinstance(self.model, nn.Module): 
             self.shap_type = "NN"
             return shap.DeepExplainer(self.model, torch.tensor(X_train.values).float()) 
-        elif hasattr(self.model, 'coef_') or isinstance(self.model, (LogisticRegression,LogisticRegressionCV,ElasticNet, RidgeClassifier)):
+        elif hasattr(self.model, 'coef_') or isinstance(self.model, (LogisticRegression,LogisticRegressionCV,ElasticNet)):
             self.shap_type = "LRegression"
             return shap.LinearExplainer(self.model, X_train)
         else:
@@ -101,7 +105,20 @@ class SHAPExplainer:
         """
         X_test = pd.DataFrame(X_test, columns=self.features_original)
         x_instance = X_test.iloc[instance_idx:instance_idx+1]
-        shap_values = self.explainer.shap_values(x_instance)
+        try:
+            shap_values = self.explainer.shap_values(np.array(x_instance))
+        except Exception as e:
+        # Catch general exceptions and check for ExplainerError
+            if "Additivity check failed" in str(e):
+                print("ExplainerError encountered:", e)
+                print("Retrying with additivity check disabled...")
+                
+                # Retry with check_additivity=False
+                shap_values =  self.explainer.shap_values(np.array(x_instance),check_additivity=False)
+                print("SHAP values computed with additivity check disabled!")
+            else:
+                # Re-raise the exception if it's not related to the additivity check
+                raise
         attributions = shap_values
         #print(self.task,self.shap_type,attributions.shape)
         if self.task == "binary-classification":

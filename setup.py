@@ -12,7 +12,8 @@ setup(
         'scikit-learn',
         'torch',
         'pandas',
-        'numpy'
+        'numpy',
+        'catboost'
     ],
     description="A package for model explainability and explainability comparision for tabular data",
     author="Pratinav Seth",
