@@ -21,11 +21,15 @@ class ExplanationMetrics:
         self.model = model
         self.explainer_name = explainer_name
         self.X_train = X_train
-        self.X_test = X_test
+        if isinstance(X_test, pd.DataFrame):
+            self.X_test = X_test.to_numpy()
+        elif isinstance(X_test, np.ndarray):
+            self.X_test = X_test
         self.y_test = y_test
         self.features = features
         self.task = task
-        self.metrics = metrics if metrics else ['faithfulness', 'infidelity', 'sensitivity', 'comprehensiveness', 'sufficiency', 'monotonicity', 'auc_tp', 'complexity', 'sparseness']
+        self.metrics = metrics if metrics else ['faithfulness', 'infidelity', 'sensitivity', 'comprehensiveness', 'sufficiency', 'monotonicity', 'complexity', 'sparseness']
+        #'auc_tp']
         self.start_idx = start_idx
         self.end_idx = end_idx if end_idx else len(X_test)
 
