@@ -69,7 +69,7 @@ model = RandomForestClassifier()
 model.fit(X, y)
 
 # Initialize SHAP explainer
-shap_explainer = SHAPExplainer(model=model, features=X.columns, task="classification", X_train=X)
+shap_explainer = SHAPExplainer(model=model, features=X.columns, task="multiclass-classification", X_train=X)
 
 # Explain a specific instance (e.g., the first instance in the test set)
 shap_attributions = shap_explainer.explain(X, instance_idx=0)
@@ -98,7 +98,7 @@ model = LogisticRegression(max_iter=200)
 model.fit(X, y)
 
 # Initialize LIME explainer
-lime_explainer = LIMEExplainer(model=model, features=X.columns, task="classification", X_train=X)
+lime_explainer = LIMEExplainer(model=model, features=X.columns, task="multiclass-classification", X_train=X)
 
 # Explain a specific instance (e.g., the first instance in the test set)
 lime_attributions = lime_explainer.explain(X, instance_idx=0)
