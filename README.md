@@ -49,6 +49,16 @@ pip install -r requirements.txt
 
 ## Usage
 
+Supported Machine Learning Models for `SHAPExplainer` and `LIMEExplainer` class is as follows : 
+
+| **Library**             | **Supported Models**                                                                                  |
+|-------------------------|------------------------------------------------------------------------------------------------------|
+| **scikit-learn**         | LogisticRegression, RandomForestClassifier, SVC, SGDClassifier, GradientBoostingClassifier, AdaBoostClassifier, DecisionTreeClassifier, KNeighborsClassifier, GaussianNB, LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis, KMeans, NearestCentroid, BaggingClassifier, VotingClassifier, MLPClassifier, LogisticRegressionCV, RidgeClassifier, ElasticNet |
+| **xgboost**              | XGBClassifier                                                                                         |
+| **catboost**             | CatBoostClassifier                                                                                   |
+| **lightgbm**             | LGBMClassifier                                                                                       |
+| **sklearn.ensemble**     | HistGradientBoostingClassifier, ExtraTreesClassifier                                                  |
+
 ### SHAP Explainer
 
 The `SHAPExplainer` class allows you to compute and visualize **SHAP** values for your trained model. It supports various types of models, including tree-based models (e.g., `RandomForest`, `XGBoost`) and deep learning models (e.g., PyTorch models).
@@ -78,6 +88,14 @@ shap_attributions = shap_explainer.explain(X, instance_idx=0)
 print(shap_attributions)
 ```
 
+| **Feature**           | **Value** | **Attribution** |
+|-----------------------|-----------|-----------------|
+| petal_length_(cm)     | 1.4       | 0.360667        |
+| petal_width_(cm)      | 0.2       | 0.294867        |
+| sepal_length_(cm)     | 5.1       | 0.023467        |
+| sepal_width_(cm)      | 3.5       | 0.010500        |
+
+
 ### LIME Explainer
 
 The `LIMEExplainer` class allows you to generate **LIME** explanations, which work by perturbing the input data and fitting a locally interpretable model.
@@ -106,6 +124,13 @@ lime_attributions = lime_explainer.explain(X, instance_idx=0)
 # Print the feature attributions
 print(lime_attributions)
 ```
+| **Feature**           | **Value** | **Attribution** |
+|-----------------------|-----------|-----------------|
+| petal_length_(cm)     | 1.4       | 0.497993        |
+| petal_width_(cm)      | 0.2       | 0.213963        |
+| sepal_length_(cm)     | 5.1       | 0.127047        |
+| sepal_width_(cm)      | 3.5       | 0.053926        |
+
 
 ### Metrics Calculation
 
