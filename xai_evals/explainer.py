@@ -121,11 +121,11 @@ class SHAPExplainer:
                 raise
         attributions = shap_values
         #print(self.task,self.shap_type,attributions.shape)
-        if self.task == "binary-classification":
+        if self.task == "binary-classification" or "binary" in self.task:
             if len(attributions.shape) == 3:
                 idx = np.argmax(self._model_predict(x_instance))
                 attributions = attributions[:,:,idx]
-        elif self.task == "multiclass-classification":
+        elif self.task == "multiclass-classification" or "multiclass" in self.task:
             if len(attributions.shape) == 3:
                 idx = np.argmax(self._model_predict(x_instance))
                 attributions = attributions[:,:,idx]
