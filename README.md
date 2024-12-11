@@ -1,6 +1,6 @@
 # xai_evals
 
-**`xai_evals`** is a Python package designed for explainable AI (XAI) and model interpretability. It provides tools for generating and evaluating explanations of machine learning models, with support for popular explanation methods such as **SHAP** and **LIME**. The package aims to simplify the interpretability of machine learning models, enabling practitioners to understand how their models make predictions. It also includes several metrics for evaluating the quality of these explanations, focusing on tabular data.
+**`xai_evals`** is a Python package designed to generate and benchmark various explainability methods for machine learning and deep learning models. It offers tools for creating and evaluating explanations of popular machine learning models, supporting widely-used explanation methods such as SHAP and LIME. The package aims to streamline the interpretability of machine learning models, allowing practitioners to gain insights into how their models make predictions. Additionally, it includes several metrics for assessing the quality of these explanations.
 
 ---
 
@@ -22,12 +22,12 @@
 To install **`xai_evals`**, you can use `pip`. First, clone the repository or download the files to your local environment. Then, install the necessary dependencies:
 
 ```bash
-git clone https://github.com/yourusername/xai_evals.git
+git clone https://github.com/AryaXAI/xai_evals.git
 cd xai_evals
-pip install -e .
+pip install .
 ```
 
-Alternatively, if you don't want to clone the repo manually, you can install the package directly from pip (after publishing it [TODO]).
+Alternatively, if you don't want to clone the repo manually, you can install the package directly from pip (after we publish it [TODO]).
 
 ### Dependencies
 
@@ -149,6 +149,23 @@ The **`ExplanationMetrics`** class in `xai_evals` provides a structured way to e
        task="binary"
    )
    ```
+
+For **ExplanationMetrics Class** we have several attributes :
+
+
+| Attribute    | Description | Values |
+|--------------|-------------|--------|
+| model | Trained model which you want to explain | {binary-classification, multiclass-classification}|
+| subset_samples | If we want to use k-means based sampling to use a subset for SHAP Explainer | True/False |
+| subset_number | Number of samples to sample if subset_samples is True | int |
+| X_train | Training Set Data | {pd.dataframe,numpy.array} |
+| X_test | Test Set Data | {pd.dataframe,numpy.array} |
+| y_test | Test Set Labels | pd.dataseries |
+| features | Features present in the Training/Testing Set | [list of features] |
+| task | Task performed by the model | {binary-classification,multiclass-classification} |
+
+
+
 
 2. **Calculate Explanation Metrics**  
    Use the `calculate_metrics` method to compute various metrics for evaluating explanations. The method returns a DataFrame with the results.
