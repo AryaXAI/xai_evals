@@ -162,7 +162,10 @@ For **ExplanationMetrics Class** we have several attributes :
 | X_test | Test Set Data | {pd.dataframe,numpy.array} |
 | y_test | Test Set Labels | pd.dataseries |
 | features | Features present in the Training/Testing Set | [list of features] |
-| task | Task performed by the model | {binary-classification,multiclass-classification} |
+| task | Task performed by the model | {binary,multiclass} |
+| metrics | List of metrics to calculate | ['faithfulness', 'infidelity', 'sensitivity', 'comprehensiveness', 'sufficiency', 'monotonicity', 'complexity', 'sparseness'] |
+| start_idx | Starting index of the dataset to evaluate | int |
+| end_idx |  Ending index of the dataset to evaluate | int |
 
 
 
@@ -190,7 +193,6 @@ The **`ExplanationMetrics`** class supports the following key metrics for evalua
 | **Comprehensiveness**| Assesses the explanatory power of the top-k features.                                        | Measures how much model prediction decreases when top-k important features are removed.         |
 | **Sufficiency**      | Determines whether top-k features alone are sufficient to explain the model's output.        | Compares predictions based only on the top-k features to baseline predictions.                 |
 | **Monotonicity**     | Verifies the consistency of attribution values with the direction of predictions.             | Ensures that changes in attributions match consistent changes in predictions.                  |
-| **AUC (Top-k)**      | Evaluates the discriminatory power of the top-k features for classification tasks.            | Calculates the Area Under the Curve (AUC) for top-k features in binary/multi-class tasks.       |
 | **Complexity**       | Measures the sparsity of explanations.                                                      | Counts the number of features with non-zero attribution values.                                |
 | **Sparseness**       | Assesses how minimal the explanation is.                                                     | Calculates the proportion of features with zero attribution values.                            |
 
@@ -239,7 +241,6 @@ After calculating the metrics, the method returns a DataFrame summarizing the re
 | Comprehensiveness | 0.62    |
 | Sufficiency       | 0.45    |
 | Monotonicity      | 1.00    |
-| AUC (Top-k)       | 0.92    |
 | Complexity        | 7       |
 | Sparseness        | 0.81    |
 
