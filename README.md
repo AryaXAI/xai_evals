@@ -1,6 +1,6 @@
 # xai_evals
 
-**`xai_evals`** is a Python package designed for explainable AI (XAI) and model interpretability. It provides tools for generating and evaluating explanations of machine learning models, with support for popular explanation methods such as **SHAP** and **LIME**. The package aims to simplify the interpretability of machine learning models, enabling practitioners to understand how their models make predictions. It also includes several metrics for evaluating the quality of these explanations, focusing on tabular data.
+**`xai_evals`** is a Python package designed to generate and benchmark various explainability methods for machine learning and deep learning models. It offers tools for creating and evaluating explanations of popular machine learning models, supporting widely-used explanation methods such as SHAP and LIME. The package aims to streamline the interpretability of machine learning models, allowing practitioners to gain insights into how their models make predictions. Additionally, it includes several metrics for assessing the quality of these explanations.
 
 ---
 
@@ -22,12 +22,12 @@
 To install **`xai_evals`**, you can use `pip`. First, clone the repository or download the files to your local environment. Then, install the necessary dependencies:
 
 ```bash
-git clone https://github.com/yourusername/xai_evals.git
+git clone https://github.com/AryaXAI/xai_evals.git
 cd xai_evals
-pip install -e .
+pip install .
 ```
 
-Alternatively, if you don't want to clone the repo manually, you can install the package directly from pip (after publishing it [TODO]).
+Alternatively, if you don't want to clone the repo manually, you can install the package directly from pip (after we publish it [TODO]).
 
 ### Dependencies
 
@@ -48,6 +48,16 @@ pip install -r requirements.txt
 ---
 
 ## Usage
+
+Supported Machine Learning Models for `SHAPExplainer` and `LIMEExplainer` class is as follows : 
+
+| **Library**             | **Supported Models**                                                                                  |
+|-------------------------|------------------------------------------------------------------------------------------------------|
+| **scikit-learn**         | LogisticRegression, RandomForestClassifier, SVC, SGDClassifier, GradientBoostingClassifier, AdaBoostClassifier, DecisionTreeClassifier, KNeighborsClassifier, GaussianNB, LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis, KMeans, NearestCentroid, BaggingClassifier, VotingClassifier, MLPClassifier, LogisticRegressionCV, RidgeClassifier, ElasticNet |
+| **xgboost**              | XGBClassifier                                                                                         |
+| **catboost**             | CatBoostClassifier                                                                                   |
+| **lightgbm**             | LGBMClassifier                                                                                       |
+| **sklearn.ensemble**     | HistGradientBoostingClassifier, ExtraTreesClassifier                                                  |
 
 ### SHAP Explainer
 
@@ -78,6 +88,14 @@ shap_attributions = shap_explainer.explain(X, instance_idx=0)
 print(shap_attributions)
 ```
 
+| **Feature**           | **Value** | **Attribution** |
+|-----------------------|-----------|-----------------|
+| petal_length_(cm)     | 1.4       | 0.360667        |
+| petal_width_(cm)      | 0.2       | 0.294867        |
+| sepal_length_(cm)     | 5.1       | 0.023467        |
+| sepal_width_(cm)      | 3.5       | 0.010500        |
+
+
 ### LIME Explainer
 
 The `LIMEExplainer` class allows you to generate **LIME** explanations, which work by perturbing the input data and fitting a locally interpretable model.
@@ -106,6 +124,13 @@ lime_attributions = lime_explainer.explain(X, instance_idx=0)
 # Print the feature attributions
 print(lime_attributions)
 ```
+| **Feature**           | **Value** | **Attribution** |
+|-----------------------|-----------|-----------------|
+| petal_length_(cm)     | 1.4       | 0.497993        |
+| petal_width_(cm)      | 0.2       | 0.213963        |
+| sepal_length_(cm)     | 5.1       | 0.127047        |
+| sepal_width_(cm)      | 3.5       | 0.053926        |
+
 
 ### Metrics Calculation
 
@@ -150,6 +175,26 @@ The **`ExplanationMetrics`** class in `xai_evals` provides a structured way to e
    )
    ```
 
+For **ExplanationMetrics Class** we have several attributes :
+
+
+| Attribute    | Description | Values |
+|--------------|-------------|--------|
+| model | Trained model which you want to explain | {binary-classification, multiclass-classification}|
+| subset_samples | If we want to use k-means based sampling to use a subset for SHAP Explainer | True/False |
+| subset_number | Number of samples to sample if subset_samples is True | int |
+| X_train | Training Set Data | {pd.dataframe,numpy.array} |
+| X_test | Test Set Data | {pd.dataframe,numpy.array} |
+| y_test | Test Set Labels | pd.dataseries |
+| features | Features present in the Training/Testing Set | [list of features] |
+| task | Task performed by the model | {binary,multiclass} |
+| metrics | List of metrics to calculate | ['faithfulness', 'infidelity', 'sensitivity', 'comprehensiveness', 'sufficiency', 'monotonicity', 'complexity', 'sparseness'] |
+| start_idx | Starting index of the dataset to evaluate | int |
+| end_idx |  Ending index of the dataset to evaluate | int |
+
+
+
+
 2. **Calculate Explanation Metrics**  
    Use the `calculate_metrics` method to compute various metrics for evaluating explanations. The method returns a DataFrame with the results.
 
@@ -173,7 +218,6 @@ The **`ExplanationMetrics`** class supports the following key metrics for evalua
 | **Comprehensiveness**| Assesses the explanatory power of the top-k features.                                        | Measures how much model prediction decreases when top-k important features are removed.         |
 | **Sufficiency**      | Determines whether top-k features alone are sufficient to explain the model's output.        | Compares predictions based only on the top-k features to baseline predictions.                 |
 | **Monotonicity**     | Verifies the consistency of attribution values with the direction of predictions.             | Ensures that changes in attributions match consistent changes in predictions.                  |
-| **AUC (Top-k)**      | Evaluates the discriminatory power of the top-k features for classification tasks.            | Calculates the Area Under the Curve (AUC) for top-k features in binary/multi-class tasks.       |
 | **Complexity**       | Measures the sparsity of explanations.                                                      | Counts the number of features with non-zero attribution values.                                |
 | **Sparseness**       | Assesses how minimal the explanation is.                                                     | Calculates the proportion of features with zero attribution values.                            |
 
@@ -222,7 +266,6 @@ After calculating the metrics, the method returns a DataFrame summarizing the re
 | Comprehensiveness | 0.62    |
 | Sufficiency       | 0.45    |
 | Monotonicity      | 1.00    |
-| AUC (Top-k)       | 0.92    |
 | Complexity        | 7       |
 | Sparseness        | 0.81    |
 
