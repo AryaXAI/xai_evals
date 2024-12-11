@@ -131,6 +131,17 @@ print(lime_attributions)
 | sepal_length_(cm)     | 5.1       | 0.127047        |
 | sepal_width_(cm)      | 3.5       | 0.053926        |
 
+For **LIMEExplainer and SHAPExplainer Class** we have several attributes :
+
+| Attribute    | Description | Values |
+|--------------|-------------|--------|
+| model | Trained model which you want to explain | {binary-classification, multiclass-classification}|
+| features | Features present in the Training/Testing Set | [list of features] |
+| X_train | Training Set Data | {pd.dataframe,numpy.array} |
+| task | Task performed by the model | {binary,multiclass} |
+| model_classes (Only for LIME) | List of Classes to be predicted by model | [list of classes] |
+| subset_samples (Only for SHAP) | If we want to use k-means based sampling to use a subset for SHAP Explainer | True/False |
+| subset_number (Only for SHAP)| Number of samples to sample if subset_samples is True | int |
 
 ### Metrics Calculation
 
@@ -181,8 +192,6 @@ For **ExplanationMetrics Class** we have several attributes :
 | Attribute    | Description | Values |
 |--------------|-------------|--------|
 | model | Trained model which you want to explain | {binary-classification, multiclass-classification}|
-| subset_samples | If we want to use k-means based sampling to use a subset for SHAP Explainer | True/False |
-| subset_number | Number of samples to sample if subset_samples is True | int |
 | X_train | Training Set Data | {pd.dataframe,numpy.array} |
 | X_test | Test Set Data | {pd.dataframe,numpy.array} |
 | y_test | Test Set Labels | pd.dataseries |
