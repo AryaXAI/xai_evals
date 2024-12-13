@@ -264,7 +264,7 @@ class LIMEExplainer:
 
 
 class TFExplainer:
-    def __init__(self, model, method, feature_names, X_train=None, task="classification"):
+    def __init__(self, model, method, feature_names, X_train=None, task="binary-classification"):
         """
         Initialize a TF explainer for Integrated Gradients, SHAP, and LIME.
         :param model: Trained TensorFlow/Keras model.
@@ -413,8 +413,8 @@ class TFExplainer:
         return attribution_df
 
 
-class CaptumExplainer:
-    def __init__(self, model, method, feature_names, X_train=None, task="classification"):
+class TorchExplainer:
+    def __init__(self, model, method, feature_names, X_train=None, task="binary-classification"):
         """
         Initialize the unified explainer for Captum, LIME, and SHAP.
         :param model: Trained PyTorch model (for Captum).
