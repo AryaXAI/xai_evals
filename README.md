@@ -254,6 +254,19 @@ The **`ExplanationMetrics`** class supports the following key metrics for evalua
 | **Complexity**       | Measures the sparsity of explanations.                                                      | Counts the number of features with non-zero attribution values.                                |
 | **Sparseness**       | Assesses how minimal the explanation is.                                                     | Calculates the proportion of features with zero attribution values.                            |
 
+Reference Values for Available Metrics : 
+
+| Metric           | Typical Range            | Interpretation                                                                                                | "Better" Direction                  |
+|------------------|--------------------------|---------------------------------------------------------------------------------------------------------------|-------------------------------------|
+| Faithfulness      | -1 to 1                 | Measures correlation between attributions and changes in model output when removing features. Higher indicates that more important features (according to the explanation) indeed cause larger changes in the model’s prediction. | Higher is better (closer to 1)      |
+| Infidelity        | ≥ 0                     | Measures how well attributions predict changes in the model’s output under input perturbations. Lower infidelity means the attributions closely match the model’s behavior under perturbations. | Lower is better (closer to 0)       |
+| Sensitivity       | ≥ 0                     | Measures how stable attributions are to small changes in the input. Lower values mean more stable (robust) explanations. | Lower is better (closer to 0)       |
+| Comprehensiveness | Depends on model output | Measures how much the prediction drops when the top-k most important features are removed. If removing them significantly decreases the prediction, it suggests these features are truly important. | Higher difference indicates more comprehensive explanations |
+| Sufficiency       | Depends on model output | Measures how well the top-k features alone approximate or even match the original prediction. A higher (or less negative) value means these top-k features are sufficient on their own, capturing most of what the model uses. | Higher (or closer to zero if baseline is the original prediction) is generally better |
+| Monotonicity      | 0 to 1 (as an average)  | Checks if attributions are in a non-increasing order. A higher average indicates that the explanation presents a consistent ranking of feature importance. | Higher is better (closer to 1)      |
+| Complexity        | Depends on number of features | Measures the number of non-zero attributions. More features with non-zero attributions mean a more complex explanation. Fewer important features make it easier to interpret. | Lower is typically preferred        |
+| Sparseness        | 0 to 1                  | Measures the fraction of attributions that are zero. Higher sparseness means fewer features are highlighted, making the explanation simpler. | Higher is generally preferred       |
+
 ---
 
 #### Practical Examples
