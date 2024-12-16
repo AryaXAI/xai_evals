@@ -13,7 +13,10 @@ setup(
         'torch',
         'pandas',
         'numpy',
-        'catboost'
+        'catboost',
+        'lightgbm',
+        'tensorflow==2.14.0',
+        'captum'
     ],
     description="A package for model explainability and explainability comparision for tabular data",
     author="Pratinav Seth",
