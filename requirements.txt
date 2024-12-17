@@ -1,7 +1,12 @@
-lime
+tensorflow==2.14.0
+dl_backtrace
 shap
-torch
+lime
 xgboost
 scikit-learn
+torch
 pandas
 numpy
+catboost
+lightgbm
+captum

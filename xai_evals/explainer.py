@@ -4,43 +4,23 @@ import lime.lime_tabular
 import numpy as np
 import pandas as pd
 import torch
-from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression, SGDClassifier, LogisticRegressionCV, RidgeClassifier, ElasticNet
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, AdaBoostClassifier, BaggingClassifier, VotingClassifier, HistGradientBoostingClassifier, ExtraTreesClassifier
 from sklearn.svm import SVC
-import xgboost as xgb
-import torch.nn as nn
-from sklearn.linear_model import LogisticRegression, SGDClassifier
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, AdaBoostClassifier
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.svm import SVC
-from sklearn.neighbors import KNeighborsClassifier
+from sklearn.neighbors import KNeighborsClassifier, NearestCentroid
 from sklearn.naive_bayes import GaussianNB
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
 from tqdm import tqdm
 from sklearn.cluster import KMeans
-from sklearn.neighbors import NearestCentroid
-from sklearn.ensemble import BaggingClassifier
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.ensemble import VotingClassifier
-from sklearn.ensemble import HistGradientBoostingClassifier
-from sklearn.ensemble import ExtraTreesClassifier
-from sklearn.ensemble import BaggingClassifier
 from sklearn.neural_network import MLPClassifier
-from sklearn.linear_model import LogisticRegressionCV
-from sklearn.linear_model import RidgeClassifier
-from sklearn.linear_model import ElasticNet
 from catboost import CatBoostClassifier
 from lightgbm import LGBMClassifier
 from xgboost import XGBClassifier
 import tensorflow as tf
-import shap
-import lime
-import lime.lime_tabular
-import pandas as pd
-import numpy as np
-
-
-import torch
+import xgboost as xgb
+from dl_backtrace.tf_backtrace import Backtrace as TFBacktrace
+from dl_backtrace.pytorch_backtrace import Backtrace as TorchBacktrace
 from captum.attr import (
     IntegratedGradients,
     DeepLift,
@@ -49,11 +29,7 @@ from captum.attr import (
     InputXGradient,
     GuidedBackprop,
 )
-import shap
-import lime
-import lime.lime_tabular
-import pandas as pd
-import numpy as np
+
 
 class SHAPExplainer:
     def __init__(self, model, features, task="binary-classification", X_train=None,classification_threshold=0.5,subset_samples=False,subset_number=100):
@@ -101,7 +77,7 @@ class SHAPExplainer:
                 return shap.TreeExplainer(self.model, X_train_sample)
             else:
                 return shap.TreeExplainer(self.model, X_train)
-        elif isinstance(self.model, nn.Module): 
+        elif isinstance(self.model, torch.nn.Module): 
             self.shap_type = "NN"
             return shap.DeepExplainer(self.model, torch.tensor(X_train.values).float()) 
         elif hasattr(self.model, 'coef_') or isinstance(self.model, (LogisticRegression,LogisticRegressionCV,ElasticNet)):
@@ -591,3 +567,91 @@ class TorchExplainer:
         )
         attribution_df = attribution_df.sort_values(by="Attribution", key=abs, ascending=False)
         return attribution_df
+
+class BacktraceExplainer:
+    def __init__(self, model, feature_names, task="binary-classification", scaler=1, thresholding=0.5, method="default", X_train=None):
+        """
+        Initialize the BacktraceExplainer with model, framework detection, task type, and other evaluation parameters.
+        :param model: Trained model (TensorFlow/Keras or PyTorch model)
+        :param task: Type of task - "binary-classification", "multi-class classification", "segmentation", etc.
+        :param method: The mode of evaluation - "default" or "contrastive"
+        :param scaler: Total / Starting Relevance at the Last Layer (Integer, Default: 1)
+        :param thresholding: Threshold for segmentation tasks (Default: 0.5)
+        :param X_train: Training data used for the model (for some explainers)
+        """
+        self.model = model
+        self.task = task
+        self.mode = method
+        self.scaler = scaler
+        self.thresholding = thresholding
+        self.feature_names = feature_names
+
+        # Automatically detect whether the model is TensorFlow or PyTorch
+        if isinstance(self.model, tf.keras.Model):  # TensorFlow model
+            self.framework = "tensorflow"
+            self.backtrace = TFBacktrace(model=model)
+            self.inp_layer = self.backtrace.model_resource["inputs"][0]
+        elif isinstance(self.model, torch.nn.Module):  # PyTorch model
+            self.framework = "pytorch"
+            self.backtrace = TorchBacktrace(model=model)
+            self.inp_layer = 'identity'
+        else:
+            raise ValueError("Unsupported model type. Only TensorFlow and PyTorch models are supported.")
+
+    def _prepare_data(self, test_data):
+        """
+        Ensure the input data is in the correct format for evaluation.
+        """
+        if isinstance(test_data, np.ndarray):
+            return test_data
+        elif isinstance(test_data, pd.DataFrame):
+            return test_data.values
+        else:
+            raise ValueError("Unsupported data format. Input must be a numpy array or pandas DataFrame.")
+
+    def explain(self, test_data, instance_idx=0):
+        """
+        Use DLBacktrace to explain a specific instance from the test data.
+        :param test_data: Test dataset (numpy array or pandas DataFrame)
+        :param instance_idx: Index of the instance to explain
+        :return: DataFrame of feature relevance for the explained instance
+        """
+        test_data = self._prepare_data(test_data)
+        instance = test_data[instance_idx:instance_idx+1]
+
+        if self.framework == "pytorch":
+            instance = torch.tensor(instance, dtype=torch.float32)
+
+        # Step 1: Get the layer outputs using the Backtrace model
+        layer_outputs = self.backtrace.predict(instance)
+        
+        # Step 2: Get the layer-wise relevance using DLBacktrace
+        relevance = self.backtrace.eval(
+            layer_outputs,
+            mode=self.mode,
+            scaler=self.scaler,
+            thresholding=self.thresholding,
+            task=self.task
+        )
+
+        # Step 3: Format the relevance output as a DataFrame, focusing on the input layer's relevance
+        return self._format_relevance(instance, relevance[self.inp_layer])
+
+    def _format_relevance(self, instance, relevance):
+        """
+        Format the relevance output into a DataFrame for better readability.
+        """
+        # Flatten the relevance and instance values to match feature dimensions
+        relevance = relevance.flatten()
+        instance = instance.flatten()
+
+        # Prepare DataFrame for feature relevance
+        relevance_df = pd.DataFrame({
+            'Feature': self.feature_names,
+            'Value': instance,
+            'Attribution': relevance
+        })
+
+        # Sort by relevance to understand the most influential features
+        relevance_df = relevance_df.sort_values(by="Attribution", key=abs, ascending=False)
+        return relevance_df

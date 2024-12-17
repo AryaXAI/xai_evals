@@ -6,6 +6,7 @@ setup(
     version="0.1",
     packages=find_packages(),
     install_requires=[
+        'dl_backtrace',
         'shap',
         'lime',
         'xgboost',
@@ -17,6 +18,7 @@ setup(
         'lightgbm',
         'tensorflow==2.14.0',
         'captum'
+
     ],
     description="A package for model explainability and explainability comparision for tabular data",
     author="Pratinav Seth",

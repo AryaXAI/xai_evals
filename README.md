@@ -220,7 +220,7 @@ For **ExplanationMetrics Class** we have several attributes :
 | X_test | Test Set Data | {pd.dataframe,numpy.array} |
 | y_test | Test Set Labels | pd.dataseries |
 | features | Features present in the Training/Testing Set | [list of features] |
-| task | Task performed by the model | {binary,multiclass} |
+| task | Task performed by the model | {binary-classification,multiclass-classification} |
 | metrics | List of metrics to calculate | ['faithfulness', 'infidelity', 'sensitivity', 'comprehensiveness', 'sufficiency', 'monotonicity', 'complexity', 'sparseness'] |
 | start_idx | Starting index of the dataset to evaluate | int |
 | end_idx |  Ending index of the dataset to evaluate | int |
