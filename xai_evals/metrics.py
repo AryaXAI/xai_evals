@@ -19,7 +19,9 @@ class ExplanationMetrics:
                  scaler=1,
                  thresholding=0.5,
                  start_idx=0, 
-                 end_idx=None):
+                 end_idx=None,
+                 subset_samples=False,
+                 subset_number=100):
         """
         Initialize ExplanationMetrics class.
         
@@ -47,6 +49,8 @@ class ExplanationMetrics:
         self.method = method
         self.scaler = scaler
         self.thresholding = thresholding
+        self.subset_samples = subset_samples
+        self.subset_number = subset_number
 
         # Set default metrics if none provided
         self.metrics = metrics if metrics else [
@@ -79,7 +83,7 @@ class ExplanationMetrics:
             raise ValueError("Task must be 'binary-classification', 'multiclass-classification', or 'regression'.")
 
         if self.explainer_name == 'shap':
-            return SHAPExplainer(model=self.model, features=pd.Series(self.features), task=self.task, X_train=self.X_train)
+            return SHAPExplainer(model=self.model, features=pd.Series(self.features), task=self.task, X_train=self.X_train,subset_samples=self.subset_samples,subset_number=self.subset_number)
         elif self.explainer_name == 'lime':
             return LIMEExplainer(model=self.model, features=self.features, task=explainer_mode, X_train=self.X_train)
         elif self.explainer_name == 'torch':
