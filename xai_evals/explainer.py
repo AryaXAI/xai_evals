@@ -37,7 +37,23 @@ class TorchImageExplainer:
     def __init__(self, model):
         self.model = model
         self.model.eval()
-        self.last_conv_layer = get_last_conv_layer(model)
+        self.last_conv_layer = self.get_last_conv_layer(model)
+
+    def get_last_conv_layer(self,model):
+        """
+        Retrieves the last convolutional layer of the model.
+        
+        Args:
+            model (nn.Module): The CNN model.
+        
+        Returns:
+            nn.Module: The last convolutional layer.
+        """
+        last_conv = None
+        for name, module in model.named_modules():
+            if isinstance(module, torch.nn.Conv2d):
+                last_conv = module
+        return last_conv
 
     def explain(self, testloader, idx, method, task):
         """

@@ -8,6 +8,8 @@ import tensorflow as tf
 from tf_explain.core import IntegratedGradients, VanillaGradients, GradCAM, SmoothGrad, OcclusionSensitivity
 import numpy as np
 import quantus
+from tensorflow.keras.utils import to_categorical
+
 
 
 class ExplanationMetricsImage:
@@ -15,7 +17,7 @@ class ExplanationMetricsImage:
     A wrapper class to evaluate explanations using Quantus metrics, supporting both PyTorch and TensorFlow models.
     """
 
-    def __init__(self, model, data_loader, framework="torch", device=None):
+    def __init__(self, model, data_loader, framework="torch", device=None, num_classes=10):
         """
         Initializes the wrapper with the model, dataset, and framework.
 
@@ -29,6 +31,7 @@ class ExplanationMetricsImage:
         self.data_loader = data_loader
         self.framework = framework.lower()
         self.device = device
+        self.num_classes = num_classes
 
         if self.framework == "torch":
             self.model.eval()
@@ -152,15 +155,16 @@ class ExplanationMetricsImage:
                 image, label = dataset[idx]
                 x_batch.append(image.numpy())
                 y_batch.append(label)
+            x_batch = np.stack(x_batch)  # Convert to numpy array
+            y_batch = np.array(y_batch)
 
         elif self.framework == "tensorflow":
             data = list(self.data_loader.unbatch().take(end_idx - start_idx).as_numpy_iterator())
             x_batch, y_batch = zip(*data)
-            
-        x_batch = np.stack(x_batch)  # Convert to numpy array
-        y_batch = np.array(y_batch)
-        y_batch = to_categorical(y_batch)
-        y_batch = np.argmax(y_batch, axis=1)
+            x_batch = np.stack(x_batch)  # Convert to numpy array
+            y_batch = np.array(y_batch)
+            y_batch = to_categorical(y_batch)
+            y_batch = np.argmax(y_batch, axis=1)
         return x_batch, y_batch
 
     def _aggregate_continuity_scores(self, scores):
