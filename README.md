@@ -1,6 +1,6 @@
 # xai_evals
 
-**`xai_evals`** is a Python package designed to generate and benchmark various explainability methods for machine learning and deep learning models. It offers tools for creating and evaluating explanations of popular machine learning models, supporting widely-used explanation methods such as SHAP and LIME. The package aims to streamline the interpretability of machine learning models, allowing practitioners to gain insights into how their models make predictions. Additionally, it includes several metrics for assessing the quality of these explanations.
+**`xai_evals`** is a Python package designed to generate and benchmark various explainability methods for machine learning and deep learning models. It offers tools for creating and evaluating explanations of popular machine learning models, supporting widely-used explanation methods. The package aims to streamline the interpretability of machine learning models, allowing practitioners to gain insights into how their models make predictions. Additionally, it includes several metrics for assessing the quality of these explanations.
 
 ---
 
@@ -35,13 +35,22 @@ Alternatively, if you don't want to clone the repo manually, you can install the
 
 ### Dependencies
 
-- `shap`: A library for SHAP values (SHapley Additive exPlanations).
-- `lime`: A library for LIME (Local Interpretable Model-Agnostic Explanations).
-- `xgboost`: A gradient boosting library.
-- `scikit-learn`: For machine learning models and utilities.
-- `torch`: For deep learning model support (optional).
-- `pandas`: For data handling.
-- `numpy`: For numerical computations.
+- **`dl_backtrace`**: A library for analyzing neural networks by tracing the relevance of each component from output to input.
+- **`shap==0.46.0`**: A library for computing SHAP values (SHapley Additive exPlanations) to interpret machine learning models.
+- **`lime==0.2.0.1`**: A library for generating LIME (Local Interpretable Model-Agnostic Explanations) to explain individual predictions.
+- **`xgboost==2.1.3`**: A gradient boosting library designed for efficient and scalable machine learning tasks.
+- **`scikit-learn==1.3.2`**: A versatile machine learning library for building and evaluating models, and performing preprocessing.
+- **`torch`**: A deep learning framework (PyTorch) for creating and training neural networks.
+- **`pandas==2.1.4`**: A powerful library for data manipulation and analysis, particularly useful for handling tabular data.
+- **`numpy==1.26.4`**: A fundamental library for numerical computations, providing support for large, multi-dimensional arrays and matrices.
+- **`catboost==1.2.7`**: A gradient boosting library that is particularly effective for categorical feature handling.
+- **`lightgbm==4.5.0`**: A fast, distributed, high-performance gradient boosting framework for machine learning.
+- **`tensorflow==2.14.0`**: An open-source library for machine learning and deep learning tasks, developed by Google.
+- **`captum==0.7.0`**: A model interpretability library for PyTorch, offering various attribution methods.
+- **`tf-explain`**: A library for interpreting deep learning models, particularly for TensorFlow/Keras-based models.
+- **`quantus`**: A library for evaluating model explanations using various quantitative metrics.
+
+This list ensures all required dependencies, with specific versions, are included for optimal compatibility.
 
 To install all dependencies, run:
 
