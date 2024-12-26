@@ -12,12 +12,11 @@
   - [LIME Tabular Explainer](#lime-tabular-explainer)
   - [Torch Tabular Explainer](#torch-tabular-explainer)
   - [TFKeras Tabular Explainer](#tfkeras-tabular-explainer)
-  - [DlBacktrace Tabular Explainer](#backtrace-tabular-explainer)
+  - [DlBacktrace Tabular Explainer](#dlbacktrace-tabular-explainer)
   - [Tabular Metrics Calculation](#tabular-metrics-calculation)
   - [Torch Image Explainer](#torch-image-explainer)
   - [TFKeras Image Explainer](#tfkeras-image-explainer)
   - [Image Metrics Calculation](#image-metrics-calculation)
-- [Contributing](#contributing)
 - [License](#license)
 
 ---
@@ -101,7 +100,7 @@ print(shap_attributions)
 | sepal_width_(cm)      | 3.5       | 0.010500        |
 
 
-### LIME Explainer
+### LIME Tabular Explainer
 
 The `LIMEExplainer` class allows you to generate **LIME** explanations, which work by perturbing the input data and fitting a locally interpretable model.
 
@@ -254,6 +253,17 @@ plt.imshow(attribution_map)
 plt.title(f"Attribution Map - {method} for Single Image (NumPy)")
 plt.show()
 ```
+
+#### **TorchImageExplainer**: `explain` Function Attributes
+
+| **Attribute** | **Description** | **Values** |
+|---------------|-----------------|-----------|
+| `testdata`    | The input data, which can be a DataLoader, NumPy array, or Tensor. | `[torch.utils.data.DataLoader, np.ndarray, torch.Tensor]` |
+| `idx`         | The index of the test sample to explain. | `int` or `None` (for explaining a single sample or all samples) |
+| `method`      | The explanation method to use. | `{grad_cam, integrated_gradients, saliency, deep_lift, gradient_shap, guided_backprop, occlusion, layer_gradcam, feature_ablation}` |
+| `task`        | The type of model task (e.g., classification). | `{classification, regression}` |
+
+---
 
 ### TFKeras Image Explainer
 
@@ -784,6 +794,23 @@ print(metrics_results)
 By leveraging these metrics, you can ensure that your explanations are meaningful, robust, and align closely with your model's decision-making process.
 
 ---
+
+### Acknowledgements
+
+We would like to extend our heartfelt thanks to the developers and contributors of the libraries **[Quantus](https://github.com/Trusted-AI/quantus)**, **[Captum](https://captum.ai/)**, **[tf-explain](https://github.com/sicara/tf-explain)**, **[LIME](https://github.com/marcotcr/lime)**, and **[SHAP](https://github.com/slundberg/shap)**, which have been instrumental in enabling the explainability methods implemented in this package.
+
+- **[Quantus](https://github.com/Trusted-AI/quantus)** provides a comprehensive suite of metrics that allow us to evaluate and assess the quality of explanations, ensuring that our interpretability methods are both reliable and robust.
+  
+- **[Captum](https://captum.ai/)** is an invaluable tool for PyTorch users, offering a variety of powerful attribution methods like Integrated Gradients, Saliency, and Gradient Shap, which are crucial for generating insights into the inner workings of deep learning models.
+
+- **[tf-explain](https://github.com/sicara/tf-explain)** simplifies the process of explaining TensorFlow/Keras models, with methods like GradCAM and Occlusion Sensitivity, enabling us to generate visual explanations that help interpret the decision-making of complex models.
+
+- **[LIME](https://github.com/marcotcr/lime)** (Local Interpretable Model-Agnostic Explanations) has been a key library for providing local explanations for machine learning models, allowing us to generate understandable explanations for individual predictions.
+
+- **[SHAP](https://github.com/slundberg/shap)** (SHapley Additive exPlanations) is essential for computing Shapley values and provides a unified approach to explaining machine learning models, making it easier to understand feature contributions across a range of model types.
+
+We are deeply grateful for the contributions these libraries have made in advancing model interpretability, and their seamless integration in our package ensures that users can leverage state-of-the-art methods for understanding machine learning and deep learning models.
+
 
 ## License
 
