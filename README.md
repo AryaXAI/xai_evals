@@ -708,6 +708,40 @@ Reference Values for Available Metrics:
 
 ---
 
+#### Initialization Attributes / Contructor for **`ExplanationMetricsImage`** class
+
+| **Attribute**        | **Description**                                                                                          | **Values**                                                                                           |
+|----------------------|----------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------|
+| `model`              | The trained model for which explanations will be evaluated.                                                | [PyTorch model, TensorFlow model]                                                                    |
+| `data_loader`        | The data loader or dataset containing the test data.                                                      | [PyTorch DataLoader, TensorFlow Dataset, numpy array]                                                |
+| `framework`          | The framework used for the model (either 'torch' or 'tensorflow').                                         | {'torch', 'tensorflow'}                                                                               |
+| `device`             | The device (CPU/GPU) used for performing computations (for PyTorch models).                               | [torch.device (Optional)]                                                                             |
+| `num_classes`        | The number of classes for classification tasks.                                                           | Integer (default: 10)                                                                                 |
+| `metrics_config`     | A dictionary of predefined metrics configurations.                                                         | Quantus metric objects (e.g., `FaithfulnessCorrelation`, `MaxSensitivity`, etc.)                     |
+| `xai_methods_config` | A dictionary of predefined configurations for explanation methods (e.g., Integrated Gradients, etc.)       | Dictionary of XAI methods with corresponding libraries and method names (e.g., `captum`, `tf-explain`) |
+
+---
+
+#### Evaluate Function (`evaluate`) for **`ExplanationMetricsImage`** class to calculate metrics
+
+| **Attribute**         | **Description**                                                                                          | **Values**                                                                                           |
+|-----------------------|----------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------|
+| `start_idx`           | The starting index of the batch for evaluation.                                                           | Integer (e.g., 0)                                                                                   |
+| `end_idx`             | The ending index of the batch for evaluation.                                                             | Integer (e.g., 100, or `None` for the entire batch)                                                  |
+| `metric_names`        | The list of metric names to evaluate.                                                                     | List of strings representing the metrics to compute (e.g., `['faithfulness', 'sensitivity']`)        |
+| `xai_method_name`     | The name of the XAI method used for explanations (e.g., 'IntegratedGradients', 'GradCAM', etc.).           | String (e.g., 'IntegratedGradients', 'GradCAM')                                                      |
+| `channel_first`       | A flag to indicate if the input data is in channel-first format (PyTorch) or channel-last format (TensorFlow). | Boolean (default: False)                                                                              |
+| `x_batch`             | The batch of input data to be explained.                                                                  | NumPy array or Tensor (depending on framework)                                                       |
+| `y_batch`             | The corresponding batch of labels for the input data.                                                     | NumPy array or Tensor                                                                                 |
+| `explain_func_kwargs` | The arguments for the explanation function (e.g., XAI method).                                             | Dictionary (method-specific arguments)                                                              |
+| `metrics`             | The dictionary of metrics to compute for the attributions.                                                 | Dictionary of Quantus metric instances                                                               |
+| `aggregated_scores`   | The final aggregated scores for each evaluated metric.                                                     | Dictionary (e.g., `{'faithfulness': 0.85, 'sensitivity': 0.72}`)                                     |
+| `raw_scores`          | The raw metric scores before aggregation.                                                                 | List or Dictionary of raw scores for each metric                                                    |
+
+---
+
+
+
 #### Practical Examples
 
 **1. Faithfulness Correlation**
@@ -744,45 +778,6 @@ After calculating the metrics, the method returns a dictionary summarizing the r
 | MaxSensitivity            | 0.92    |
 
 ---
-
-#### Explanation Metrics Attributes
-
-For **ExplanationMetricsImage Class**, we have several attributes:
-
-| Attribute    | Description | Values |
-|--------------|-------------|--------|
-| model        | Trained model to explain | [Torch/Tf Model] |
-| data_loader | DataLoader for test dataset | [DataLoader] |
-| framework   | Framework of the model | {torch, tensorflow} |
-| num_classes | Number of classes for classification tasks | int |
-
----
-
-### Example Usage:
-
-```python
-from xai_evals.metrics import ExplanationMetricsImage
-from torch.utils.data import DataLoader
-from torchvision import models, transforms
-from torchvision.datasets import ImageFolder
-
-# Load dataset and model
-transform = transforms.Compose([transforms.Resize(256), transforms.CenterCrop(224), transforms.ToTensor()])
-dataset = ImageFolder("path/to/images", transform=transform)
-test_loader = DataLoader(dataset, batch_size=1)
-
-# Initialize model and metrics
-model = models.resnet50(pretrained=True)
-metrics_image = ExplanationMetricsImage(model=model, data_loader=test_loader, framework="torch", num_classes=1000)
-
-# Evaluate explanation metrics
-metrics_results = metrics_image.evaluate(
-    start_idx=0, end_idx=5, metric_names=["FaithfulnessCorrelation", "MaxSensitivity"], xai_method_name="IntegratedGradients"
-)
-print(metrics_results)
-```
-
---- 
 
 #### Benefits of ExplanationMetrics
 
