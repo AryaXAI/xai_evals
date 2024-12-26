@@ -413,10 +413,6 @@ After calculating the metrics, the method returns a DataFrame summarizing the re
 
 ---
 
-### Here is the rewritten README documentation for the **`ExplanationMetricsImage`** class, incorporating all the requested details in the correct place:
-
----
-
 ### Image Metrics Calculation
 
 The **`xai_evals`** package provides a powerful class, **`ExplanationMetricsImage`**, to evaluate the quality of explanations generated for image-based deep learning models. This class allows you to calculate several metrics, helping you assess the robustness, reliability, and interpretability of your image explanations. [NOTE: Metrics currently support image-based deep learning models such as PyTorch and TensorFlow.]
