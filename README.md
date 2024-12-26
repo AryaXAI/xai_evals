@@ -8,8 +8,8 @@
 
 - [Installation](#installation)
 - [Usage](#usage)
-  - [SHAP Explainer](#shap-explainer)
-  - [LIME Explainer](#lime-explainer)
+  - [SHAP Tabular Explainer](#shap-tabular-explainer)
+  - [LIME Tabular Explainer](#lime-tabular-explainer)
   - [Torch Tabular Explainer](#torch-tabular-explainer)
   - [TFKeras Tabular Explainer](#tfkeras-tabular-explainer)
   - [DlBacktrace Tabular Explainer](#backtrace-tabular-explainer)
@@ -17,7 +17,6 @@
   - [Torch Image Explainer](#torch-image-explainer)
   - [TFKeras Image Explainer](#tfkeras-image-explainer)
   - [Image Metrics Calculation](#image-metrics-calculation)
-- [Extending with More Explanations](#extending-with-more-explanations)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -65,7 +64,7 @@ Supported Machine Learning Models for `SHAPExplainer` and `LIMEExplainer` class 
 | **lightgbm**             | LGBMClassifier                                                                                       |
 | **sklearn.ensemble**     | HistGradientBoostingClassifier, ExtraTreesClassifier                                                  |
 
-### SHAP Explainer
+### SHAP Tabular Explainer
 
 The `SHAPExplainer` class allows you to compute and visualize **SHAP** values for your trained model. It supports various types of models, including tree-based models (e.g., `RandomForest`, `XGBoost`) and deep learning models (e.g., PyTorch models).
 
