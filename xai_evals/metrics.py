@@ -33,7 +33,7 @@ class ExplanationMetricsImage:
 
         if self.framework == "torch":
             self.model.eval()
-
+            
         # Predefined configuration for metrics
         self.metrics_config = {
             "FaithfulnessCorrelation": quantus.FaithfulnessCorrelation(subset_size=16),

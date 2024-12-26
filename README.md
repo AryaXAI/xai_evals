@@ -205,27 +205,55 @@ The `TorchImageExplainer` class allows you to generate explanations for PyTorch-
 **Example:**
 
 ```python
-from xai_evals.explainer import TorchImageExplainer
 import torch
-from torchvision import models, transforms
+import torchvision
+import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
-from torchvision.datasets import ImageFolder
+from xai_evals.explainer import TorchImageExplainer
+from torchvision import models
+import numpy as np
+import matplotlib.pyplot as plt
 
-# Load a pre-trained model
-model = models.resnet50(pretrained=True)
+# Load CIFAR-10 dataset
+transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
+trainloader = DataLoader(trainset, batch_size=4, shuffle=True)
+
+# Load pre-trained ResNet model
+model = models.resnet18(pretrained=True)
 model.eval()
 
-# Initialize the explainer
+# Initialize the TorchImageExplainer
 explainer = TorchImageExplainer(model)
 
-# Load an image dataset
-transform = transforms.Compose([transforms.Resize(256), transforms.CenterCrop(224), transforms.ToTensor()])
-dataset = ImageFolder("path/to/images", transform=transform)
-test_loader = DataLoader(dataset, batch_size=1)
+# Example 1: Explain using DataLoader (batch of images)
+idx = 0  # Index for the image in the DataLoader
+method = "integrated_gradients"
+task = "classification"
+attribution_map = explainer.explain(trainloader, idx, method, task)
 
-# Explain a specific image (index 0 in the test set) using Integrated Gradients
-attribution = explainer.explain(test_loader, idx=0, method="integrated_gradients", task="classification")
-print(attribution)
+# Visualize attribution map (simplified)
+plt.imshow(attribution_map)
+plt.title(f"Attribution Map - {method} for Dataloader Torch")
+plt.show()
+
+# Example 2: Explain using a single image (torch.Tensor)
+single_image_tensor = torch.randn(3, 32, 32)  # Random image as a tensor, [C, H, W]
+attribution_map = explainer.explain(single_image_tensor, idx=None, method=method, task=task)
+
+# Visualize attribution map for the single image
+plt.imshow(attribution_map)
+plt.title(f"Attribution Map - {method} for Single Image (Tensor)")
+plt.show()
+
+# Example 3: Explain using a single image (np.ndarray)
+single_image_numpy = np.random.randn(3, 32, 32)  # Random image as a NumPy array, [C, H, W]
+attribution_map = explainer.explain(single_image_numpy, idx=None, method=method, task=task)
+
+# Visualize attribution map for the single image (NumPy)
+plt.imshow(attribution_map)
+plt.title(f"Attribution Map - {method} for Single Image (NumPy)")
+plt.show()
 ```
 
 ### TFKeras Image Explainer
@@ -235,28 +263,73 @@ The `TFImageExplainer` class provides a similar functionality for TensorFlow/Ker
 **Example:**
 
 ```python
-from xai_evals.explainer import TFImageExplainer
 import tensorflow as tf
-from tensorflow.keras.applications import VGG16
-from tensorflow.keras.preprocessing import image
+from tensorflow.keras import layers, models
+from tensorflow.keras.datasets import cifar10
 import numpy as np
+import matplotlib.pyplot as plt
+from xai_evals.explainer import TFImageExplainer
 
-# Load a pre-trained model
-model = VGG16(weights="imagenet")
-model.trainable = False
+# Step 1: Define a Custom CNN Model
+def create_custom_model():
+    model = models.Sequential([
+        layers.Conv2D(32, (3, 3), activation='relu', input_shape=(32, 32, 3)),
+        layers.MaxPooling2D((2, 2)),
+        layers.Conv2D(64, (3, 3), activation='relu'),
+        layers.MaxPooling2D((2, 2)),
+        layers.Conv2D(64, (3, 3), activation='relu'),
+        layers.Flatten(),
+        layers.Dense(64, activation='relu'),
+        layers.Dense(10, activation='softmax')
+    ])
+    model.compile(optimizer='adam',
+                  loss='sparse_categorical_crossentropy',
+                  metrics=['accuracy'])
+    return model
 
-# Initialize the explainer
+# Load CIFAR-10 dataset
+(x_train, y_train), (x_test, y_test) = cifar10.load_data()
+
+# Normalize pixel values to be between 0 and 1
+x_train = x_train.astype("float32") / 255.0
+x_test = x_test.astype("float32") / 255.0
+
+# Create a TensorFlow Dataset from the test data
+test_dataset = tf.data.Dataset.from_tensor_slices((x_test, y_test)).batch(32)
+
+# Initialize and train the custom model
+model = create_custom_model()
+
+# Train the model
+model.fit(x_train, y_train, epochs=1, batch_size=64)
+
+# Step 2: Use the TFImageExplainer with the Custom Model
 explainer = TFImageExplainer(model)
 
-# Load an image for explanation
-img_path = "path/to/image.jpg"
-img = image.load_img(img_path, target_size=(224, 224))
-img_array = image.img_to_array(img)
-img_array = np.expand_dims(img_array, axis=0)
+# Example 1: Explain a Single Image (NumPy Array)
+image = x_test[0]  # Select the first image
+label = y_test[0]  # Get the label for the first image
 
-# Explain the image using GradCAM
-attribution = explainer.explain(img_array, idx=0, method="grad_cam", task="classification")
-print(attribution)
+# Generate the Grad-CAM explanation for the image
+attribution_map = explainer.explain(image, idx=None, method="grad_cam", task="classification")
+
+# Visualize the attribution map
+plt.imshow(attribution_map, cmap="jet")
+plt.colorbar()
+plt.title("Grad-CAM Attribution Map for CIFAR-10 Image")
+plt.show()
+
+# Example 2: Explain an Image from the TensorFlow Dataset (Using idx)
+idx = 10  # Select the 10th image from the test dataset
+
+# Generate the Grad-CAM explanation for the image at index `idx`
+attribution_map = explainer.explain(test_dataset, idx, method="grad_cam", task="classification")
+
+# Visualize the attribution map
+plt.imshow(attribution_map, cmap="jet")
+plt.colorbar()
+plt.title(f"Grad-CAM Attribution Map for Image Index {idx} in CIFAR-10")
+plt.show()
 ```
 
 ### Tabular Metrics Calculation
@@ -428,43 +501,174 @@ The **`ExplanationMetricsImage`** class in **`xai_evals`** provides a structured
 1. **Initialize ExplanationMetricsImage**  
    Begin by creating an instance of the **`ExplanationMetricsImage`** class with the necessary inputs, including the model, dataset, and evaluation settings.
 
-   ```python
-   from xai_evals.metrics import ExplanationMetricsImage
-   from torchvision import models, transforms
-   from torch.utils.data import DataLoader
-   from torchvision.datasets import ImageFolder
-   import torch
-
-   # Load dataset and model
-   transform = transforms.Compose([transforms.Resize(256), transforms.CenterCrop(224), transforms.ToTensor()])
-   dataset = ImageFolder("path/to/images", transform=transform)
-   test_loader = DataLoader(dataset, batch_size=1)
-
-   # Initialize model
-   model = models.resnet50(pretrained=True)
-   model.eval()
-
-   # Initialize ExplanationMetricsImage with model and data
-   metrics_image = ExplanationMetricsImage(
-       model=model,
-       data_loader=test_loader,
-       framework="torch",
-       num_classes=1000
-   )
-   ```
-
 2. **Evaluate Explanation Metrics**  
    Use the `evaluate` method to compute various metrics for evaluating image-based explanations. The method returns a dictionary with the results.
 
    ```python
-   # Calculate metrics
-   metrics_results = metrics_image.evaluate(
-       start_idx=0,
-       end_idx=5,
-       metric_names=["FaithfulnessCorrelation", "MaxSensitivity"],
-       xai_method_name="IntegratedGradients"
+   import torch
+   import torchvision
+   import torchvision.transforms as transforms
+   from torch.utils.data import DataLoader
+   from tensorflow.keras.datasets import cifar10
+   from xai_evals.metrics import ExplanationMetricsImage
+   from torchvision import models
+   import tensorflow as tf
+   import numpy as np
+   import torch.optim as optim
+   import tensorflow.keras as keras
+
+   # --- TensorFlow Setup ---
+   # Load CIFAR-10 dataset (for TensorFlow example)
+   (x_train, y_train), (x_test, y_test) = cifar10.load_data()
+   x_train, x_test = x_train / 255.0, x_test / 255.0  # Normalize the images
+   train_data = (x_train, y_train)  # Tuple of data and labels
+   test_data = (x_test, y_test)     # Tuple of data and labels
+
+   # Convert to TensorFlow Dataset
+   train_dataset_tf = tf.data.Dataset.from_tensor_slices(train_data).batch(32)
+   test_dataset_tf = tf.data.Dataset.from_tensor_slices(test_data).batch(32)
+
+   # --- PyTorch Setup ---
+   # PyTorch Dataset for CIFAR-10
+   transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+   trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
+   trainloader = DataLoader(trainset, batch_size=4, shuffle=True)
+
+
+   # --- Custom Model Setup ---
+   # Custom PyTorch model (simple CNN for CIFAR-10)
+   class SimpleCNN(torch.nn.Module):
+      def __init__(self):
+         super(SimpleCNN, self).__init__()
+         self.conv1 = torch.nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1)
+         self.conv2 = torch.nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
+         self.fc1 = torch.nn.Linear(64*8*8, 128)
+         self.fc2 = torch.nn.Linear(128, 10)  # 10 classes for CIFAR-10
+
+      def forward(self, x):
+         x = torch.relu(self.conv1(x))
+         x = torch.max_pool2d(x, 2)
+         x = torch.relu(self.conv2(x))
+         x = torch.max_pool2d(x, 2)
+         x = x.view(x.size(0), -1)
+         x = torch.relu(self.fc1(x))
+         x = self.fc2(x)
+         return x
+
+   # --- TensorFlow Model Setup ---
+   model_tf = tf.keras.Sequential([
+      tf.keras.layers.Conv2D(32, kernel_size=3, activation='relu', input_shape=(32, 32, 3)),
+      tf.keras.layers.MaxPooling2D(pool_size=(2, 2)),
+      tf.keras.layers.Conv2D(64, kernel_size=3, activation='relu'),
+      tf.keras.layers.MaxPooling2D(pool_size=(2, 2)),
+      tf.keras.layers.Flatten(),
+      tf.keras.layers.Dense(128, activation='relu'),
+      tf.keras.layers.Dense(10)  # 10 classes for CIFAR-10
+   ])
+
+   # Compile the model for training
+   model_tf.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+   # --- TensorFlow Model Training (1 Epoch) ---
+   model_tf.fit(train_dataset_tf, epochs=1)
+
+   print("Finished TensorFlow Training")
+   # Initialize PyTorch model
+   model_torch = SimpleCNN()
+   model_torch.train()  # Set model to training mode
+
+   # --- Training PyTorch Model for 1 Epoch ---
+   criterion = torch.nn.CrossEntropyLoss()
+   optimizer = optim.SGD(model_torch.parameters(), lr=0.001, momentum=0.9)
+
+   for epoch in range(1):  # Training for 1 epoch
+      running_loss = 0.0
+      for i, data in enumerate(trainloader, 0):
+         inputs, labels = data
+         optimizer.zero_grad()
+
+         outputs = model_torch(inputs)
+         loss = criterion(outputs, labels)
+         loss.backward()
+         optimizer.step()
+
+         running_loss += loss.item()
+         if i % 2000 == 1999:  # Print every 2000 mini-batches
+               print(f"[{epoch + 1}, {i + 1}] loss: {running_loss / 2000:.3f}")
+               running_loss = 0.0
+
+   print("Finished PyTorch Training")
+   # --- Example 1: PyTorch Metrics Calculation ---
+   metrics_image_pytorch = ExplanationMetricsImage(
+      model=model_torch, 
+      data_loader=trainloader, 
+      framework="torch", 
+      num_classes=10
    )
-   print(metrics_results)
+
+   # Example: Calculate metrics using the PyTorch DataLoader
+   metrics_results_pytorch = metrics_image_pytorch.evaluate(
+      start_idx=0, end_idx=32, 
+      metric_names=["FaithfulnessCorrelation","MaxSensitivity","MPRT","SmoothMPRT","AvgSensitivity","FaithfulnessEstimate"], 
+      xai_method_name="IntegratedGradients", 
+      channel_first=True
+   )
+   print("PyTorch Example Metrics:", metrics_results_pytorch)
+   # --- Example 2: TensorFlow Metrics Calculation ---
+   metrics_image_tensorflow = ExplanationMetricsImage(
+      model=model_tf,  # Use TensorFlow model for TensorFlow example
+      data_loader=train_dataset_tf,
+      framework="tensorflow",
+      num_classes=10
+   )
+
+   # Example: Calculate metrics using the TensorFlow Dataset
+   metrics_results_tensorflow = metrics_image_tensorflow.evaluate(
+      start_idx=0, end_idx=32, 
+      metric_names=["FaithfulnessCorrelation","MaxSensitivity","MPRT","SmoothMPRT","AvgSensitivity","FaithfulnessEstimate"],
+      xai_method_name="GradCAM"
+   )
+   print("TensorFlow Example Metrics:", metrics_results_tensorflow)
+   # --- Example 3: Explain using a single image (numpy array) ---
+   single_image_numpy = np.random.randn(1,3,32, 32)  # Random image as a NumPy array, [H, W, C]
+   label = np.random.randint(0, 9,size=1)
+
+   # Initialize ExplanationMetricsImage for a single image (use PyTorch framework even for NumPy array)
+   metrics_image_single = ExplanationMetricsImage(
+      model=model_torch,  # Use PyTorch model
+      data_loader=(single_image_numpy,label),  # Pass the single image as a numpy array
+      framework="torch",  # Use the torch framework for single image
+      num_classes=10,
+   )
+
+   # Calculate metrics for the single image
+   metrics_single_image = metrics_image_single.evaluate(
+      start_idx=0, end_idx=1, 
+      metric_names=["FaithfulnessCorrelation","MaxSensitivity","MPRT","SmoothMPRT","AvgSensitivity","FaithfulnessEstimate"],
+      xai_method_name="IntegratedGradients",
+      channel_first=True
+   )
+   print("Single Image Example Metrics:", metrics_single_image)
+   # --- Example 4: TensorFlow Model with Single Image ---
+   single_image_numpy = np.random.randn(1,32, 32,3)  # Random image as a NumPy array, [H, W, C]
+   label = np.random.randint(0, 9,size=1)
+   # For TensorFlow, the single image example using TensorFlow framework
+   metrics_image_single_tf = ExplanationMetricsImage(
+      model=model_tf,  # Use TensorFlow model
+      data_loader=(single_image_numpy,label),  # Pass the single image as a numpy array
+      framework="tensorflow",  # Use the tensorflow framework for single image
+      num_classes=10
+   )
+
+   # Calculate metrics for the single image
+   metrics_single_image_tf = metrics_image_single_tf.evaluate(
+      start_idx=0, end_idx=1, 
+      metric_names=["FaithfulnessCorrelation","MaxSensitivity","MPRT","SmoothMPRT","AvgSensitivity","FaithfulnessEstimate"],
+      xai_method_name="GradCAM",
+      channel_first=True
+   )
+   print("TensorFlow Single Image Example Metrics:", metrics_single_image_tf)
+
+
    ```
 
 ---
