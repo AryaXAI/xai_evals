@@ -55,7 +55,7 @@ class TorchImageExplainer:
                 last_conv = module
         return last_conv
 
-    def explain(self, testloader, idx, method, task):
+    def explain(self, testdata, idx=None, method="grad_cam", task="classification"):
         """
         Generates attributions for a specific test sample using a specified method.
         
@@ -68,9 +68,27 @@ class TorchImageExplainer:
         Returns:
             np.ndarray: 2D attribution map.
         """
-        dataset = testloader.dataset
-        image, label = dataset[idx]
-        image = image.unsqueeze(0).to(next(self.model.parameters()).device)  # [1,C,H,W]
+        # If input is a DataLoader (batch of images), extract the specific image and label
+        if isinstance(testdata, torch.utils.data.DataLoader):
+            dataset = testdata.dataset
+            image, label = dataset[idx]
+            image = image.unsqueeze(0).to(next(self.model.parameters()).device)  # [1, C, H, W]
+            label = label
+
+        # If input is a Tensor or NumPy array (single image), use the provided data
+        elif isinstance(testdata, torch.Tensor):
+            image = testdata[idx] if idx is not None else testdata
+            image = image.unsqueeze(0).to(next(self.model.parameters()).device)  # [1, C, H, W]
+            label = None  # For single image, label can be None or passed externally
+
+        elif isinstance(testdata, np.ndarray):
+            image = testdata[idx] if idx is not None else testdata
+            image = torch.tensor(image).float().unsqueeze(0).to(next(self.model.parameters()).device)  # [1, C, H, W]
+            label = None  # For single image, label can be None or passed externally
+
+        else:
+            raise ValueError("Invalid test data type. Must be Tensor, NumPy array, or DataLoader.")
+
 
         with torch.no_grad():
             logits = self.model(image)
@@ -149,11 +167,16 @@ class TorchImageExplainer:
 class TFImageExplainer:
     """
     Wrapper for tf-explain explainers for TensorFlow models.
+    Handles both single image and dataset cases.
     """
     def __init__(self, model):
+        """
+        Initializes the explainer with a TensorFlow model.
+        """
         self.model = model
         self.model.trainable = False  # Set model to inference mode
         self.last_conv_layer = self._get_last_conv_layer()
+        self.is_single_image = False
 
     def _get_last_conv_layer(self):
         """
@@ -164,57 +187,54 @@ class TFImageExplainer:
                 return layer
         raise ValueError("No convolutional layer found in the model")
 
-    def explain(self, testset, idx, method, task="classification"):
+    def explain(self, testset, idx=None, method="grad_cam",task=None,label=0):
         """
         Generates attributions for a specific test sample using a specified method.
         """
-        # Retrieve the specific batch containing the image at the given index
-        batch = list(testset.take(idx // testset.cardinality().numpy() + 1))[-1]  # Retrieve the required batch
-        images, labels = batch
+        # Check if the input is a single image (NumPy array or TensorFlow tensor)
+                # Determine class index
+        if isinstance(testset, (np.ndarray, tf.Tensor)):
+            # If idx is None, process the entire single image
+            if idx is not None:
+                raise ValueError("For single image input, idx should be None.")
+            image = testset
+            self.is_single_image = True
+            class_index = int(label)
+        elif isinstance(testset, tf.data.Dataset):
+            # If it's a TensorFlow Dataset, handle idx
+            self.is_single_image = False
+            batch = list(testset.take(idx // testset.cardinality().numpy() + 1))[-1]  # Retrieve the required batch
+            images, labels = batch
 
-        # Get the specific image and label from the batch
-        image = images[idx % images.shape[0]]  # Get the specific image at the index
-        label = labels[idx % images.shape[0]]  # Get the corresponding label
+            # Get the specific image and label from the batch
+            image = images[idx % images.shape[0]]
+            label = labels[idx % images.shape[0]]
+            class_index = int(label)
+        else:
+            raise ValueError("Unsupported input type. Expected a NumPy array, TensorFlow tensor, or Dataset.")
 
-        # Add a batch dimension (model expects [batch_size, H, W, C])
-        image = tf.expand_dims(image, axis=0)
+        image = tf.expand_dims(image, axis=0)  # This ensures the image has shape (1, height, width, channels)
         image_numpy = image.numpy()  # Convert to NumPy for compatibility with tf-explain
 
-        # Determine class index
-        class_index = int(label) if task == "classification" else None
-
-        #if method == "integrated_gradients":
-        #    explainer = IntegratedGradients()
-        #    attributions = explainer.explain((image_numpy, class_index), self.model)
-        #elif method == "vanilla_gradients":
-        #    explainer = VanillaGradients()
-        #    attributions = explainer.explain((image_numpy, class_index), self.model)
+        # Choose the appropriate explanation method
         if method == "grad_cam":
             explainer = GradCAM()
             if class_index is None:
                 raise ValueError("class_index must be provided for GradCAM in classification tasks.")
             attributions = explainer.explain((image_numpy, None), self.model, class_index=class_index, layer_name=self.last_conv_layer.name)
-        #elif method == "smoothgrad":
-        #    explainer = SmoothGrad()
-        #    attributions = explainer.explain((image_numpy, None), self.model)
-        #elif method == "activations":
-        #    explainer = ExtractActivations()
-        #    attributions = explainer.explain((image_numpy, None), self.model)
+
         elif method == "occlusion":
             explainer = OcclusionSensitivity()
             if class_index is None:
                 raise ValueError("class_index must be provided for OcclusionSensitivity in classification tasks.")
             attributions = explainer.explain((image_numpy, None), self.model, class_index=class_index, patch_size=8)
-        #elif method == "gradients_inputs":
-        #    explainer = GradientsInputs()
-        #   attributions = explainer.explain((image_numpy, None), self.model)
+
         else:
             raise ValueError(f"Unsupported method: {method}")
 
         # Convert the attribution to 2D by averaging over channels (RGB)
-        attr_2d = np.mean(attributions, axis=-1)
+        attr_2d = np.mean(attributions, axis=-1)  # This collapses the channels to provide a 2D map
         return attr_2d
-
 
 class SHAPExplainer:
     def __init__(self, model, features, task="binary-classification", X_train=None,classification_threshold=0.5,subset_samples=False,subset_number=100):

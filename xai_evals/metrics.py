@@ -10,8 +10,6 @@ import numpy as np
 import quantus
 from tensorflow.keras.utils import to_categorical
 
-
-
 class ExplanationMetricsImage:
     """
     A wrapper class to evaluate explanations using Quantus metrics, supporting both PyTorch and TensorFlow models.
@@ -145,27 +143,85 @@ class ExplanationMetricsImage:
             end_idx (int): End index of the batch.
 
         Returns:
-            tuple: x_batch (numpy.ndarray), y_batch (numpy.ndarray)
+            tuple: x_batch (numpy.ndarray, torch.Tensor, or tf.Tensor), y_batch (numpy.ndarray, torch.Tensor, or tf.Tensor)
         """
         x_batch, y_batch = [], []
 
-        if self.framework == "torch":
+        # Case 1: PyTorch DataLoader (torch.utils.data.DataLoader)
+        if isinstance(self.data_loader, torch.utils.data.DataLoader):
             dataset = self.data_loader.dataset
             for idx in range(start_idx, end_idx):
                 image, label = dataset[idx]
                 x_batch.append(image.numpy())
                 y_batch.append(label)
-            x_batch = np.stack(x_batch)  # Convert to numpy array
+            
+            # Convert to the correct type (either torch.Tensor or numpy array)
+            x_batch = np.stack(x_batch)
             y_batch = np.array(y_batch)
 
-        elif self.framework == "tensorflow":
-            data = list(self.data_loader.unbatch().take(end_idx - start_idx).as_numpy_iterator())
+        # Case 2: TensorFlow DataLoader (tf.data.Dataset)
+        elif isinstance(self.data_loader, tf.data.Dataset):
+            #data = list(self.data_loader.unbatch().take(end_idx - start_idx).as_numpy_iterator())
+            data = list(self.data_loader.skip(start_idx).unbatch().take(end_idx - start_idx).as_numpy_iterator())
             x_batch, y_batch = zip(*data)
-            x_batch = np.stack(x_batch)  # Convert to numpy array
+            x_batch = np.stack(x_batch)
             y_batch = np.array(y_batch)
-            y_batch = to_categorical(y_batch)
-            y_batch = np.argmax(y_batch, axis=1)
+
+            # Ensure labels are non-categorical integers (0, 1, 2, ...)
+            if len(y_batch.shape) > 1 :
+                y_batch = to_categorical(y_batch)
+                y_batch = np.argmax(y_batch, axis=1)
+
+        # Case 3: Tuple (numpy.ndarray, numpy.ndarray) or (torch.Tensor, torch.Tensor)
+        elif isinstance(self.data_loader, tuple):
+            data, labels = self.data_loader
+            if end_idx > start_idx:
+                if start_idx == 0 and end_idx == 1:
+                    x_batch = data
+                    y_batch = labels
+                else:
+                    x_batch = data[start_idx:end_idx]
+                    y_batch = labels[start_idx:end_idx]
+
+            # Ensure the data and labels are in the correct format
+            #if isinstance(x_batch, np.ndarray):
+            #x_batch = torch.tensor(x_batch, dtype=torch.float32)
+
+            if isinstance(x_batch, torch.Tensor):
+                x_batch = x_batch.numpy()
+            elif isinstance(x_batch, tf.Tensor):
+                x_batch = x_batch.numpy()
+            
+
+            if isinstance(y_batch, torch.Tensor):
+                y_batch = y_batch.numpy()
+            elif isinstance(y_batch, tf.Tensor):
+                y_batch = y_batch.numpy()
+
+            # Ensure labels are non-categorical (integer labels)
+            if len(y_batch.shape) > 1 :
+                y_batch = to_categorical(y_batch)
+                y_batch = np.argmax(y_batch, axis=1)
+
+        # Case 4: Raw PyTorch Dataset (torch.utils.data.Dataset)
+        elif isinstance(self.data_loader, torch.utils.data.Dataset):
+            x_batch, y_batch = [], []
+            for idx in range(start_idx, end_idx):
+                image, label = self.data_loader[idx]
+                x_batch.append(image)
+                y_batch.append(label)
+
+            # Convert lists to tensors or numpy arrays
+            x_batch = np.stack(x_batch)
+            y_batch = np.array(y_batch)
+
+        # Case 5: Invalid Data Type
+        else:
+            raise ValueError("Invalid data type. Expected DataLoader, Dataset, or Tuple of arrays.")
+
         return x_batch, y_batch
+
+
 
     def _aggregate_continuity_scores(self, scores):
         """
