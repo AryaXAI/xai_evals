@@ -31,16 +31,8 @@ from captum.attr import (
 from captum.attr import LayerAttribution
 
 class BacktraceImageExplainer:
-    def __init__(self, model,mode='default',scaler=1,thresholding=0,task='binary-classification',contrast_mode='Positive'):
+    def __init__(self, model,):
         self.model = model
-        self.mode = mode
-        self.scaler = scaler
-        self.thresholding = thresholding
-        self.task = task
-        if self.mode == 'contrast':
-            self.contrast_mode = contrast_mode
-        else:
-            self.contrast_mode = None
         # Automatically detect whether the model is TensorFlow or PyTorch
         if isinstance(self.model, tf.keras.Model):  # TensorFlow model
             self.framework = "tensorflow"
@@ -61,21 +53,33 @@ class BacktraceImageExplainer:
         return last_conv
     
     
-    def explain(self, test_data, instance_idx=0):
-        if isinstance(test_data, torch.utils.data.DataLoader):
-            dataset = test_data.dataset
-            image, label = dataset[instance_idx]
+    def explain(self, test_data, instance_idx=0,mode='default',scaler=1,thresholding=0,task='binary-classification',contrast_mode='Positive'):
+        relevance = None
+        self.test_data = test_data
+        self.instance_idx = instance_idx
+        self.mode = mode
+        self.scaler = scaler
+        self.thresholding = thresholding
+        self.task = task
+        if self.mode == 'contrast':
+            self.contrast_mode = contrast_mode
+        else:
+            self.contrast_mode = None
+
+        if isinstance(self.test_data, torch.utils.data.DataLoader):
+            dataset = self.test_data.dataset
+            image, label = dataset[self.instance_idx]
             instance = image.unsqueeze(0).to(next(self.model.parameters()).device)  # [1, C, H, W]
             label = label
 
         # If input is a Tensor or NumPy array (single image), use the provided data
-        elif isinstance(test_data, torch.Tensor):
-            image = test_data[instance_idx] if instance_idx is not None else test_data
+        elif isinstance(self.test_data, torch.Tensor):
+            image = self.test_data[self.instance_idx] if instance_idx is not None else test_data
             instance = image.unsqueeze(0).to(next(self.model.parameters()).device)  # [1, C, H, W]
             label = None  # For single image, label can be None or passed externally
 
-        elif isinstance(test_data, np.ndarray):
-            image = test_data[instance_idx] if instance_idx is not None else test_data
+        elif isinstance(self.test_data, np.ndarray):
+            image = self.test_data[self.instance_idx] if instance_idx is not None else test_data
             instance = np.expand_dims(image, 0)
             label = None  # For single image, label can be None or passed externally
 
@@ -114,7 +118,7 @@ class BacktraceImageExplainer:
                 attr_2d = np.mean(relevance[self.inp_layer],axis=-1)
 
         return attr_2d
-        
+
 class TorchImageExplainer:
     """
     Wrapper for Captum explainers.
