@@ -30,6 +30,91 @@ from captum.attr import (
 )
 from captum.attr import LayerAttribution
 
+class BacktraceImageExplainer:
+    def __init__(self, model,mode='default',scaler=1,thresholding=0,task='binary-classification',contrast_mode='Positive'):
+        self.model = model
+        self.mode = mode
+        self.scaler = scaler
+        self.thresholding = thresholding
+        self.task = task
+        if self.mode == 'contrast':
+            self.contrast_mode = contrast_mode
+        else:
+            self.contrast_mode = None
+        # Automatically detect whether the model is TensorFlow or PyTorch
+        if isinstance(self.model, tf.keras.Model):  # TensorFlow model
+            self.framework = "tensorflow"
+            self.backtrace = TFBacktrace(model=model)
+            self.inp_layer = self.backtrace.model_resource["inputs"][0]
+        elif isinstance(self.model, torch.nn.Module):  # PyTorch model
+            self.framework = "pytorch"
+            self.backtrace = TorchBacktrace(model=model)
+            self.inp_layer = 'identity'
+        else:
+            raise ValueError("Unsupported model type. Only TensorFlow and PyTorch models are supported.")
+    
+    def get_last_conv_layer(self,model):
+        last_conv = None
+        for name, module in model.named_modules():
+            if isinstance(module, torch.nn.Conv2d):
+                last_conv = module
+        return last_conv
+    
+    
+    def explain(self, test_data, instance_idx=0):
+        if isinstance(test_data, torch.utils.data.DataLoader):
+            dataset = test_data.dataset
+            image, label = dataset[instance_idx]
+            instance = image.unsqueeze(0).to(next(self.model.parameters()).device)  # [1, C, H, W]
+            label = label
+
+        # If input is a Tensor or NumPy array (single image), use the provided data
+        elif isinstance(test_data, torch.Tensor):
+            image = test_data[instance_idx] if instance_idx is not None else test_data
+            instance = image.unsqueeze(0).to(next(self.model.parameters()).device)  # [1, C, H, W]
+            label = None  # For single image, label can be None or passed externally
+
+        elif isinstance(test_data, np.ndarray):
+            image = test_data[instance_idx] if instance_idx is not None else test_data
+            instance = np.expand_dims(image, 0)
+            label = None  # For single image, label can be None or passed externally
+
+        else:
+            raise ValueError("Invalid test data type. Must be Tensor, NumPy array, or DataLoader.")
+
+        if self.framework == "pytorch":
+            instance = torch.tensor(instance, dtype=torch.float32)
+
+        # Step 1: Get the layer outputs using the Backtrace model
+        layer_outputs = self.backtrace.predict(instance)
+        
+        # Step 2: Get the layer-wise relevance using DLBacktrace
+        relevance = self.backtrace.eval(
+            layer_outputs,
+            mode=self.mode,
+            scaler=self.scaler,
+            thresholding=self.thresholding,
+            task=self.task
+        )
+
+        if self.framework == "pytorch":
+            if self.mode == 'default':
+                attr_2d = np.mean(relevance[self.inp_layer],axis=-3)
+            elif self.mode == 'contrast':
+                attr_2d = np.mean(relevance[self.inp_layer][self.contrast_mode],axis=-3)
+            else:
+                attr_2d = np.mean(relevance[self.inp_layer],axis=-3)
+        else:
+            # Aggregate attributions over channels (RGB) by taking the mean
+            if self.mode == 'default':
+                attr_2d = np.mean(relevance[self.inp_layer],axis=-1)
+            elif self.mode == 'contrast':
+                attr_2d = np.mean(relevance[self.inp_layer][self.contrast_mode],axis=-1)
+            else:
+                attr_2d = np.mean(relevance[self.inp_layer],axis=-1)
+
+        return attr_2d
+        
 class TorchImageExplainer:
     """
     Wrapper for Captum explainers.
