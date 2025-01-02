@@ -360,6 +360,164 @@ plt.show()
 | `task`        | The type of model task (e.g., classification). | `{classification}` |
 | `label`       | The class label for the input sample (used for classification tasks). | `int` |
 
+---
+
+### Backtrace Image Explainer
+
+The `BacktraceImageExplainer` based on DLBacktrace, a method for analyzing neural networks by tracing the relevance of each component from output to input, to understand how each part contributes to the final prediction. It offers two modes: Default and Contrast, and is compatible with TensorFlow and PyTorch. (https://github.com/AryaXAI/DLBacktrace)
+
+**Example: Tensorflow Model BacktraceImageExplainer**
+
+```python
+import tensorflow as tf
+from tensorflow.keras import layers, models
+from tensorflow.keras.datasets import cifar10
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Load CIFAR-10 data
+(x_train, y_train), (x_test, y_test) = cifar10.load_data()
+
+# Normalize pixel values to be between 0 and 1
+x_train, x_test = x_train / 255.0, x_test / 255.0
+
+# Create a simple CNN model for CIFAR-10
+def create_cnn_model():
+    model = models.Sequential([
+        layers.Conv2D(32, (3, 3), activation='relu', input_shape=(32, 32, 3)),
+        layers.MaxPooling2D((2, 2)),
+        layers.Conv2D(64, (3, 3), activation='relu'),
+        layers.MaxPooling2D((2, 2)),
+        layers.Conv2D(64, (3, 3), activation='relu'),
+        layers.Flatten(),
+        layers.Dense(64, activation='relu'),
+        layers.Dense(10)
+    ])
+    model.compile(optimizer='adam',
+                  loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+                  metrics=['accuracy'])
+    return model
+
+# Create the model
+model = create_cnn_model()
+
+# Train the model
+model.fit(x_train, y_train, epochs=10, validation_data=(x_test, y_test))
+
+# Save the model for later use
+model.save('cifar10_cnn_model.h5')
+
+explainer = BacktraceImageExplainer(model=model)
+
+# Choose an image from the test set
+test_image = x_test[0:1]  # Selecting the first image for testing
+
+# Get the explanation for the test image
+explanation = explainer.explain(test_image, instance_idx=0,mode='default', scaler=1, thresholding=0, task='multi-class-classification')
+
+# Plot the explanation (relevance map)
+plt.imshow(explanation, cmap='hot')
+plt.colorbar()
+plt.title("Feature Relevance for CIFAR-10 Image")
+plt.show()
+```
+
+**Example: Torch Model BacktraceImageExplainer**
+
+```python
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torchvision
+import torchvision.transforms as transforms
+from torch.utils.data import DataLoader
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Define a simple CNN model for CIFAR-10 without using `view()`
+class SimpleCNN(nn.Module):
+    def __init__(self, num_classes=10):
+        super(SimpleCNN, self).__init__()
+        self.identity = nn.Identity()
+        self.conv1 = nn.Conv2d(3, 16, 5,2)
+        self.relu1 = nn.ReLU()
+        self.conv2 = nn.Conv2d(16, 32, 3,2)
+        self.relu2 = nn.ReLU()
+        self.flatten = nn.Flatten()
+        self.fc1 = nn.Linear(32 * 6 * 6, 512)
+        self.relu3 = nn.ReLU()
+        self.fc2 = nn.Linear(512, num_classes)
+
+    def forward(self, x):
+        x = self.identity(x)
+        x = self.conv1(x)
+        x = self.relu1(x)
+        x = self.conv2(x)
+        x = self.relu2(x)
+        x = self.flatten(x)
+        x = self.fc1(x)
+        x = self.relu3(x)
+        x = self.fc2(x)
+        return x
+
+# Load CIFAR-10 data with transforms for normalization
+transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+
+trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
+testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform)
+
+trainloader = DataLoader(trainset, batch_size=4, shuffle=True)
+testloader = DataLoader(testset, batch_size=4, shuffle=False)
+
+# Initialize and train the model
+model = SimpleCNN()
+model.train()
+
+# Define loss and optimizer
+criterion = nn.CrossEntropyLoss()
+optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+
+# Training loop
+for epoch in range(1):  # Just a couple of epochs for testing
+    running_loss = 0.0
+    for inputs, labels in trainloader:
+        optimizer.zero_grad()
+        outputs = model(inputs)
+        loss = criterion(outputs, labels)
+        loss.backward()
+        optimizer.step()
+        running_loss += loss.item()
+
+print("Finished Training")
+
+# Test the model using the BacktraceImageExplainer
+explainer = BacktraceImageExplainer(model=model)
+
+
+# Get the explanation for the first image
+explanation = explainer.explain(testloader, instance_idx=0, mode='default', scaler=1, thresholding=0, task='multi-class-classification')
+
+# Plot the explanation (relevance map)
+plt.imshow(explanation, cmap='hot')
+plt.colorbar()
+plt.title("Feature Relevance for CIFAR-10 Image")
+plt.show()
+```
+
+#### **BacktraceImageExplainer**: `explain` Function Attributes
+
+| **Attribute** | **Description** | **Values** |
+|---------------|-----------------|-----------|
+| `test_data`     | The input data, which can be a NumPy array, TensorFlow tensor, or Dataset. | `[np.ndarray, tf.Tensor, tf.data.Dataset]` |
+| `instance_idx`         | The index of the test sample to explain. | `int` (explaining a single sample) |
+| `mode`      | The explanation mode to use. | `{default, contrast}` |
+| `task`        | The type of model task (e.g., classification). | `{binary-classification,multiclass-classification}` |
+| `scaler`       | Total / Starting Relevance at the Last Layer	 | `float` ( Default: None, Preferred: 1) |
+| `thresholding` | Thresholding Model Prediction to predict the actual class. | `float` |
+| `contrast_mode` | Mode to Use if using 'contrast' mode of DlBacktrace Algorithm | `{Positive,Negative}` |
+
+---
+
 ### Tabular Metrics Calculation
 
 The **`xai_evals`** package provides a powerful class, **`ExplanationMetrics`**, to evaluate the quality of explanations generated by SHAP and LIME. This class allows you to calculate several metrics, helping you assess the robustness, reliability, and interpretability of your model explanations. [NOTE: Metrics only supports Sklearn ML Models]
