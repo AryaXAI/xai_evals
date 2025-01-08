@@ -1,6 +1,6 @@
 # xai_evals
 
-**`xai_evals`** is a Python package designed to generate and benchmark various explainability methods for machine learning and deep learning models. It offers tools for creating and evaluating explanations of popular machine learning models, supporting widely-used explanation methods such as SHAP and LIME. The package aims to streamline the interpretability of machine learning models, allowing practitioners to gain insights into how their models make predictions. Additionally, it includes several metrics for assessing the quality of these explanations.
+**`xai_evals`** is a Python package designed to generate and benchmark various explainability methods for machine learning and deep learning models. It offers tools for creating and evaluating explanations of popular machine learning models, supporting widely-used explanation methods. The package aims to streamline the interpretability of machine learning models, allowing practitioners to gain insights into how their models make predictions. Additionally, it includes several metrics for assessing the quality of these explanations.
 
 ---
 
@@ -8,11 +8,15 @@
 
 - [Installation](#installation)
 - [Usage](#usage)
-  - [SHAP Explainer](#shap-explainer)
-  - [LIME Explainer](#lime-explainer)
-  - [Metrics Calculation](#metrics-calculation)
-- [Extending with More Explanations](#extending-with-more-explanations)
-- [Contributing](#contributing)
+  - [SHAP Tabular Explainer](#shap-tabular-explainer)
+  - [LIME Tabular Explainer](#lime-tabular-explainer)
+  - [Torch Tabular Explainer](#torch-tabular-explainer)
+  - [TFKeras Tabular Explainer](#tfkeras-tabular-explainer)
+  - [DlBacktrace Tabular Explainer](#dlbacktrace-tabular-explainer)
+  - [Tabular Metrics Calculation](#tabular-metrics-calculation)
+  - [Torch Image Explainer](#torch-image-explainer)
+  - [TFKeras Image Explainer](#tfkeras-image-explainer)
+  - [Image Metrics Calculation](#image-metrics-calculation)
 - [License](#license)
 
 ---
@@ -31,13 +35,22 @@ Alternatively, if you don't want to clone the repo manually, you can install the
 
 ### Dependencies
 
-- `shap`: A library for SHAP values (SHapley Additive exPlanations).
-- `lime`: A library for LIME (Local Interpretable Model-Agnostic Explanations).
-- `xgboost`: A gradient boosting library.
-- `scikit-learn`: For machine learning models and utilities.
-- `torch`: For deep learning model support (optional).
-- `pandas`: For data handling.
-- `numpy`: For numerical computations.
+- **`dl_backtrace`**: A library for analyzing neural networks by tracing the relevance of each component from output to input.
+- **`shap==0.46.0`**: A library for computing SHAP values (SHapley Additive exPlanations) to interpret machine learning models.
+- **`lime==0.2.0.1`**: A library for generating LIME (Local Interpretable Model-Agnostic Explanations) to explain individual predictions.
+- **`xgboost==2.1.3`**: A gradient boosting library designed for efficient and scalable machine learning tasks.
+- **`scikit-learn==1.3.2`**: A versatile machine learning library for building and evaluating models, and performing preprocessing.
+- **`torch`**: A deep learning framework (PyTorch) for creating and training neural networks.
+- **`pandas==2.1.4`**: A powerful library for data manipulation and analysis, particularly useful for handling tabular data.
+- **`numpy==1.26.4`**: A fundamental library for numerical computations, providing support for large, multi-dimensional arrays and matrices.
+- **`catboost==1.2.7`**: A gradient boosting library that is particularly effective for categorical feature handling.
+- **`lightgbm==4.5.0`**: A fast, distributed, high-performance gradient boosting framework for machine learning.
+- **`tensorflow==2.14.0`**: An open-source library for machine learning and deep learning tasks, developed by Google.
+- **`captum==0.7.0`**: A model interpretability library for PyTorch, offering various attribution methods.
+- **`tf-explain`**: A library for interpreting deep learning models, particularly for TensorFlow/Keras-based models.
+- **`quantus`**: A library for evaluating model explanations using various quantitative metrics.
+
+This list ensures all required dependencies, with specific versions, are included for optimal compatibility.
 
 To install all dependencies, run:
 
@@ -59,7 +72,7 @@ Supported Machine Learning Models for `SHAPExplainer` and `LIMEExplainer` class 
 | **lightgbm**             | LGBMClassifier                                                                                       |
 | **sklearn.ensemble**     | HistGradientBoostingClassifier, ExtraTreesClassifier                                                  |
 
-### SHAP Explainer
+### SHAP Tabular Explainer
 
 The `SHAPExplainer` class allows you to compute and visualize **SHAP** values for your trained model. It supports various types of models, including tree-based models (e.g., `RandomForest`, `XGBoost`) and deep learning models (e.g., PyTorch models).
 
@@ -96,7 +109,7 @@ print(shap_attributions)
 | sepal_width_(cm)      | 3.5       | 0.010500        |
 
 
-### LIME Explainer
+### LIME Tabular Explainer
 
 The `LIMEExplainer` class allows you to generate **LIME** explanations, which work by perturbing the input data and fitting a locally interpretable model.
 
@@ -144,7 +157,7 @@ For **LIMEExplainer and SHAPExplainer Class** we have several attributes :
 | subset_number (Only for SHAP)| Number of samples to sample if subset_samples is True | int |
 
 
-### TorchExplainer
+### Torch Tabular Explainer
 
 The `TorchExplainer` class allows you to generate explanations for Pytorch Deep Learning Model . Explaination Method available include 'integrated_gradients', 'deep_lift', 'gradient_shap','saliency', 'input_x_gradient', 'guided_backprop','shap_kernel', 'shap_deep' and 'lime'.
 
@@ -156,7 +169,7 @@ The `TorchExplainer` class allows you to generate explanations for Pytorch Deep 
 | feature_names | Features present in the Training/Testing Set | [list of features] |
 | task | Task performed by the model | {binary-classification,multiclass-classification} |
 
-### TFExplainer
+### TFKeras Tabular Explainer
 
 The `TFExplainer` class allows you to generate explanations for Tensorflow/Keras Deep Learning Model . Explaination Method available include 'shap_kernel', 'shap_deep' and 'lime'.
 
@@ -170,7 +183,7 @@ The `TFExplainer` class allows you to generate explanations for Tensorflow/Keras
 
 
 
-### BacktraceExplainer
+### DlBacktrace Tabular Explainer
 
 The `BacktraceExplainer` , based on DLBacktrace, a method for analyzing neural networks by tracing the relevance of each component from output to input, to understand how each part contributes to the final prediction. It offers two modes: Default and Contrast, and is compatible with TensorFlow and PyTorch. (https://github.com/AryaXAI/DLBacktrace)
         
@@ -184,11 +197,332 @@ The `BacktraceExplainer` , based on DLBacktrace, a method for analyzing neural n
 | thresholding | Thresholding for Model Prediction | float (Default : 0.5) |
 | task | Task performed by the model | {binary-classification,multiclass-classification} |
 
-### Metrics Calculation
+### Torch Image Explainer
+
+The `TorchImageExplainer` class allows you to generate explanations for PyTorch-based CNN models. This class wraps around several attribution methods available in Captum, including:
+
+- **Integrated Gradients**
+- **Saliency**
+- **DeepLift**
+- **GradientShap**
+- **GuidedBackprop**
+- **Occlusion**
+- **LayerGradCam**
+
+**Example:**
+
+```python
+import torch
+import torchvision
+import torchvision.transforms as transforms
+from torch.utils.data import DataLoader
+from xai_evals.explainer import TorchImageExplainer
+from torchvision import models
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Load CIFAR-10 dataset
+transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
+trainloader = DataLoader(trainset, batch_size=4, shuffle=True)
+
+# Load pre-trained ResNet model
+model = models.resnet18(pretrained=True)
+model.eval()
+
+# Initialize the TorchImageExplainer
+explainer = TorchImageExplainer(model)
+
+# Example 1: Explain using DataLoader (batch of images)
+idx = 0  # Index for the image in the DataLoader
+method = "integrated_gradients"
+task = "classification"
+attribution_map = explainer.explain(trainloader, idx, method, task)
+
+# Visualize attribution map (simplified)
+plt.imshow(attribution_map)
+plt.title(f"Attribution Map - {method} for Dataloader Torch")
+plt.show()
+
+# Example 2: Explain using a single image (torch.Tensor)
+single_image_tensor = torch.randn(3, 32, 32)  # Random image as a tensor, [C, H, W]
+attribution_map = explainer.explain(single_image_tensor, idx=None, method=method, task=task)
+
+# Visualize attribution map for the single image
+plt.imshow(attribution_map)
+plt.title(f"Attribution Map - {method} for Single Image (Tensor)")
+plt.show()
+
+# Example 3: Explain using a single image (np.ndarray)
+single_image_numpy = np.random.randn(3, 32, 32)  # Random image as a NumPy array, [C, H, W]
+attribution_map = explainer.explain(single_image_numpy, idx=None, method=method, task=task)
+
+# Visualize attribution map for the single image (NumPy)
+plt.imshow(attribution_map)
+plt.title(f"Attribution Map - {method} for Single Image (NumPy)")
+plt.show()
+```
+
+#### **TorchImageExplainer**: `explain` Function Attributes
+
+| **Attribute** | **Description** | **Values** |
+|---------------|-----------------|-----------|
+| `testdata`    | The input data, which can be a DataLoader, NumPy array, or Tensor. | `[torch.utils.data.DataLoader, np.ndarray, torch.Tensor]` |
+| `idx`         | The index of the test sample to explain. | `int` or `None` (for explaining a single sample or all samples) |
+| `method`      | The explanation method to use. | `{grad_cam, integrated_gradients, saliency, deep_lift, gradient_shap, guided_backprop, occlusion, layer_gradcam, feature_ablation}` |
+| `task`        | The type of model task (e.g., classification). | `{classification}` |
+
+---
+
+### TFKeras Image Explainer
+
+The `TFImageExplainer` class provides a similar functionality for TensorFlow/Keras-based models, allowing you to generate explanations for images using methods like GradCAM and Occlusion Sensitivity.
+
+**Example:**
+
+```python
+import tensorflow as tf
+from tensorflow.keras import layers, models
+from tensorflow.keras.datasets import cifar10
+import numpy as np
+import matplotlib.pyplot as plt
+from xai_evals.explainer import TFImageExplainer
+
+# Step 1: Define a Custom CNN Model
+def create_custom_model():
+    model = models.Sequential([
+        layers.Conv2D(32, (3, 3), activation='relu', input_shape=(32, 32, 3)),
+        layers.MaxPooling2D((2, 2)),
+        layers.Conv2D(64, (3, 3), activation='relu'),
+        layers.MaxPooling2D((2, 2)),
+        layers.Conv2D(64, (3, 3), activation='relu'),
+        layers.Flatten(),
+        layers.Dense(64, activation='relu'),
+        layers.Dense(10, activation='softmax')
+    ])
+    model.compile(optimizer='adam',
+                  loss='sparse_categorical_crossentropy',
+                  metrics=['accuracy'])
+    return model
+
+# Load CIFAR-10 dataset
+(x_train, y_train), (x_test, y_test) = cifar10.load_data()
+
+# Normalize pixel values to be between 0 and 1
+x_train = x_train.astype("float32") / 255.0
+x_test = x_test.astype("float32") / 255.0
+
+# Create a TensorFlow Dataset from the test data
+test_dataset = tf.data.Dataset.from_tensor_slices((x_test, y_test)).batch(32)
+
+# Initialize and train the custom model
+model = create_custom_model()
+
+# Train the model
+model.fit(x_train, y_train, epochs=1, batch_size=64)
+
+# Step 2: Use the TFImageExplainer with the Custom Model
+explainer = TFImageExplainer(model)
+
+# Example 1: Explain a Single Image (NumPy Array)
+image = x_test[0]  # Select the first image
+label = y_test[0]  # Get the label for the first image
+
+# Generate the Grad-CAM explanation for the image
+attribution_map = explainer.explain(image, idx=None, method="grad_cam", task="classification")
+
+# Visualize the attribution map
+plt.imshow(attribution_map, cmap="jet")
+plt.colorbar()
+plt.title("Grad-CAM Attribution Map for CIFAR-10 Image")
+plt.show()
+
+# Example 2: Explain an Image from the TensorFlow Dataset (Using idx)
+idx = 10  # Select the 10th image from the test dataset
+
+# Generate the Grad-CAM explanation for the image at index `idx`
+attribution_map = explainer.explain(test_dataset, idx, method="grad_cam", task="classification")
+
+# Visualize the attribution map
+plt.imshow(attribution_map, cmap="jet")
+plt.colorbar()
+plt.title(f"Grad-CAM Attribution Map for Image Index {idx} in CIFAR-10")
+plt.show()
+```
+
+#### **TFImageExplainer**: `explain` Function Attributes
+
+| **Attribute** | **Description** | **Values** |
+|---------------|-----------------|-----------|
+| `testset`     | The input data, which can be a NumPy array, TensorFlow tensor, or Dataset. | `[np.ndarray, tf.Tensor, tf.data.Dataset]` |
+| `idx`         | The index of the test sample to explain. | `int` or `None` (for explaining a single sample or all samples) |
+| `method`      | The explanation method to use. | `{grad_cam, occlusion}` |
+| `task`        | The type of model task (e.g., classification). | `{classification}` |
+| `label`       | The class label for the input sample (used for classification tasks). | `int` |
+
+---
+
+### Backtrace Image Explainer
+
+The `BacktraceImageExplainer` based on DLBacktrace, a method for analyzing neural networks by tracing the relevance of each component from output to input, to understand how each part contributes to the final prediction. It offers two modes: Default and Contrast, and is compatible with TensorFlow and PyTorch. (https://github.com/AryaXAI/DLBacktrace)
+
+**Example: Tensorflow Model BacktraceImageExplainer**
+
+```python
+import tensorflow as tf
+from tensorflow.keras import layers, models
+from tensorflow.keras.datasets import cifar10
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Load CIFAR-10 data
+(x_train, y_train), (x_test, y_test) = cifar10.load_data()
+
+# Normalize pixel values to be between 0 and 1
+x_train, x_test = x_train / 255.0, x_test / 255.0
+
+# Create a simple CNN model for CIFAR-10
+def create_cnn_model():
+    model = models.Sequential([
+        layers.Conv2D(32, (3, 3), activation='relu', input_shape=(32, 32, 3)),
+        layers.MaxPooling2D((2, 2)),
+        layers.Conv2D(64, (3, 3), activation='relu'),
+        layers.MaxPooling2D((2, 2)),
+        layers.Conv2D(64, (3, 3), activation='relu'),
+        layers.Flatten(),
+        layers.Dense(64, activation='relu'),
+        layers.Dense(10)
+    ])
+    model.compile(optimizer='adam',
+                  loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+                  metrics=['accuracy'])
+    return model
+
+# Create the model
+model = create_cnn_model()
+
+# Train the model
+model.fit(x_train, y_train, epochs=10, validation_data=(x_test, y_test))
+
+# Save the model for later use
+model.save('cifar10_cnn_model.h5')
+
+explainer = BacktraceImageExplainer(model=model)
+
+# Choose an image from the test set
+test_image = x_test[0:1]  # Selecting the first image for testing
+
+# Get the explanation for the test image
+explanation = explainer.explain(test_image, instance_idx=0,mode='default', scaler=1, thresholding=0, task='multi-class-classification')
+
+# Plot the explanation (relevance map)
+plt.imshow(explanation, cmap='hot')
+plt.colorbar()
+plt.title("Feature Relevance for CIFAR-10 Image")
+plt.show()
+```
+
+**Example: Torch Model BacktraceImageExplainer**
+
+```python
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torchvision
+import torchvision.transforms as transforms
+from torch.utils.data import DataLoader
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Define a simple CNN model for CIFAR-10 without using `view()`
+class SimpleCNN(nn.Module):
+    def __init__(self, num_classes=10):
+        super(SimpleCNN, self).__init__()
+        self.identity = nn.Identity()
+        self.conv1 = nn.Conv2d(3, 16, 5,2)
+        self.relu1 = nn.ReLU()
+        self.conv2 = nn.Conv2d(16, 32, 3,2)
+        self.relu2 = nn.ReLU()
+        self.flatten = nn.Flatten()
+        self.fc1 = nn.Linear(32 * 6 * 6, 512)
+        self.relu3 = nn.ReLU()
+        self.fc2 = nn.Linear(512, num_classes)
+
+    def forward(self, x):
+        x = self.identity(x)
+        x = self.conv1(x)
+        x = self.relu1(x)
+        x = self.conv2(x)
+        x = self.relu2(x)
+        x = self.flatten(x)
+        x = self.fc1(x)
+        x = self.relu3(x)
+        x = self.fc2(x)
+        return x
+
+# Load CIFAR-10 data with transforms for normalization
+transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+
+trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
+testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform)
+
+trainloader = DataLoader(trainset, batch_size=4, shuffle=True)
+testloader = DataLoader(testset, batch_size=4, shuffle=False)
+
+# Initialize and train the model
+model = SimpleCNN()
+model.train()
+
+# Define loss and optimizer
+criterion = nn.CrossEntropyLoss()
+optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+
+# Training loop
+for epoch in range(1):  # Just a couple of epochs for testing
+    running_loss = 0.0
+    for inputs, labels in trainloader:
+        optimizer.zero_grad()
+        outputs = model(inputs)
+        loss = criterion(outputs, labels)
+        loss.backward()
+        optimizer.step()
+        running_loss += loss.item()
+
+print("Finished Training")
+
+# Test the model using the BacktraceImageExplainer
+explainer = BacktraceImageExplainer(model=model)
+
+
+# Get the explanation for the first image
+explanation = explainer.explain(testloader, instance_idx=0, mode='default', scaler=1, thresholding=0, task='multi-class-classification')
+
+# Plot the explanation (relevance map)
+plt.imshow(explanation, cmap='hot')
+plt.colorbar()
+plt.title("Feature Relevance for CIFAR-10 Image")
+plt.show()
+```
+
+#### **BacktraceImageExplainer**: `explain` Function Attributes
+
+| **Attribute** | **Description** | **Values** |
+|---------------|-----------------|-----------|
+| `test_data`     | The input data, which can be a NumPy array, TensorFlow tensor, or Dataset. | `[np.ndarray, tf.Tensor, tf.data.Dataset]` |
+| `instance_idx`         | The index of the test sample to explain. | `int` (explaining a single sample) |
+| `mode`      | The explanation mode to use. | `{default, contrast}` |
+| `task`        | The type of model task (e.g., classification). | `{binary-classification,multiclass-classification}` |
+| `scaler`       | Total / Starting Relevance at the Last Layer	 | `float` ( Default: None, Preferred: 1) |
+| `thresholding` | Thresholding Model Prediction to predict the actual class. | `float` |
+| `contrast_mode` | Mode to Use if using 'contrast' mode of DlBacktrace Algorithm | `{Positive,Negative}` |
+
+---
+
+### Tabular Metrics Calculation
 
 The **`xai_evals`** package provides a powerful class, **`ExplanationMetrics`**, to evaluate the quality of explanations generated by SHAP and LIME. This class allows you to calculate several metrics, helping you assess the robustness, reliability, and interpretability of your model explanations. [NOTE: Metrics only supports Sklearn ML Models]
 
-### ExplanationMetrics Class
+#### ExplanationMetrics Class
 
 
 The **`ExplanationMetrics`** class in `xai_evals` provides a structured way to evaluate the quality and reliability of explanations generated by SHAP or LIME for machine learning models. By assessing multiple metrics, you can better understand how well these explanations align with your model's predictions and behavior.
@@ -337,6 +671,282 @@ After calculating the metrics, the method returns a DataFrame summarizing the re
 
 ---
 
+### Image Metrics Calculation
+
+The **`xai_evals`** package provides a powerful class, **`ExplanationMetricsImage`**, to evaluate the quality of explanations generated for image-based deep learning models. This class allows you to calculate several metrics, helping you assess the robustness, reliability, and interpretability of your image explanations. [NOTE: Metrics currently support image-based deep learning models such as PyTorch and TensorFlow.]
+
+#### ExplanationMetricsImage Class
+
+The **`ExplanationMetricsImage`** class in **`xai_evals`** provides a structured way to evaluate the quality and reliability of image-based explanations, such as GradCAM, Integrated Gradients, and Occlusion. By assessing multiple metrics, you can better understand how well these image explanations align with your model's predictions and behavior. This class uses **Quantus** to calculate the various metrics for evaluating explanations.
+
+---
+
+#### Steps for Using ExplanationMetricsImage
+
+1. **Initialize ExplanationMetricsImage**  
+   Begin by creating an instance of the **`ExplanationMetricsImage`** class with the necessary inputs, including the model, dataset, and evaluation settings.
+
+2. **Evaluate Explanation Metrics**  
+   Use the `evaluate` method to compute various metrics for evaluating image-based explanations. The method returns a dictionary with the results.
+
+   ```python
+   import torch
+   import torchvision
+   import torchvision.transforms as transforms
+   from torch.utils.data import DataLoader
+   from tensorflow.keras.datasets import cifar10
+   from xai_evals.metrics import ExplanationMetricsImage
+   from torchvision import models
+   import tensorflow as tf
+   import numpy as np
+   import torch.optim as optim
+   import tensorflow.keras as keras
+
+   # --- TensorFlow Setup ---
+   # Load CIFAR-10 dataset (for TensorFlow example)
+   (x_train, y_train), (x_test, y_test) = cifar10.load_data()
+   x_train, x_test = x_train / 255.0, x_test / 255.0  # Normalize the images
+   train_data = (x_train, y_train)  # Tuple of data and labels
+   test_data = (x_test, y_test)     # Tuple of data and labels
+
+   # Convert to TensorFlow Dataset
+   train_dataset_tf = tf.data.Dataset.from_tensor_slices(train_data).batch(32)
+   test_dataset_tf = tf.data.Dataset.from_tensor_slices(test_data).batch(32)
+
+   # --- PyTorch Setup ---
+   # PyTorch Dataset for CIFAR-10
+   transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+   trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
+   trainloader = DataLoader(trainset, batch_size=4, shuffle=True)
+
+
+   # --- Custom Model Setup ---
+   # Custom PyTorch model (simple CNN for CIFAR-10)
+   class SimpleCNN(torch.nn.Module):
+      def __init__(self):
+         super(SimpleCNN, self).__init__()
+         self.conv1 = torch.nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1)
+         self.conv2 = torch.nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
+         self.fc1 = torch.nn.Linear(64*8*8, 128)
+         self.fc2 = torch.nn.Linear(128, 10)  # 10 classes for CIFAR-10
+
+      def forward(self, x):
+         x = torch.relu(self.conv1(x))
+         x = torch.max_pool2d(x, 2)
+         x = torch.relu(self.conv2(x))
+         x = torch.max_pool2d(x, 2)
+         x = x.view(x.size(0), -1)
+         x = torch.relu(self.fc1(x))
+         x = self.fc2(x)
+         return x
+
+   # --- TensorFlow Model Setup ---
+   model_tf = tf.keras.Sequential([
+      tf.keras.layers.Conv2D(32, kernel_size=3, activation='relu', input_shape=(32, 32, 3)),
+      tf.keras.layers.MaxPooling2D(pool_size=(2, 2)),
+      tf.keras.layers.Conv2D(64, kernel_size=3, activation='relu'),
+      tf.keras.layers.MaxPooling2D(pool_size=(2, 2)),
+      tf.keras.layers.Flatten(),
+      tf.keras.layers.Dense(128, activation='relu'),
+      tf.keras.layers.Dense(10)  # 10 classes for CIFAR-10
+   ])
+
+   # Compile the model for training
+   model_tf.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+   # --- TensorFlow Model Training (1 Epoch) ---
+   model_tf.fit(train_dataset_tf, epochs=1)
+
+   print("Finished TensorFlow Training")
+   # Initialize PyTorch model
+   model_torch = SimpleCNN()
+   model_torch.train()  # Set model to training mode
+
+   # --- Training PyTorch Model for 1 Epoch ---
+   criterion = torch.nn.CrossEntropyLoss()
+   optimizer = optim.SGD(model_torch.parameters(), lr=0.001, momentum=0.9)
+
+   for epoch in range(1):  # Training for 1 epoch
+      running_loss = 0.0
+      for i, data in enumerate(trainloader, 0):
+         inputs, labels = data
+         optimizer.zero_grad()
+
+         outputs = model_torch(inputs)
+         loss = criterion(outputs, labels)
+         loss.backward()
+         optimizer.step()
+
+         running_loss += loss.item()
+         if i % 2000 == 1999:  # Print every 2000 mini-batches
+               print(f"[{epoch + 1}, {i + 1}] loss: {running_loss / 2000:.3f}")
+               running_loss = 0.0
+
+   print("Finished PyTorch Training")
+   # --- Example 1: PyTorch Metrics Calculation ---
+   metrics_image_pytorch = ExplanationMetricsImage(
+      model=model_torch, 
+      data_loader=trainloader, 
+      framework="torch", 
+      num_classes=10
+   )
+
+   # Example: Calculate metrics using the PyTorch DataLoader
+   metrics_results_pytorch = metrics_image_pytorch.evaluate(
+      start_idx=0, end_idx=32, 
+      metric_names=["FaithfulnessCorrelation","MaxSensitivity","MPRT","SmoothMPRT","AvgSensitivity","FaithfulnessEstimate"], 
+      xai_method_name="IntegratedGradients", 
+      channel_first=True
+   )
+   print("PyTorch Example Metrics:", metrics_results_pytorch)
+   # --- Example 2: TensorFlow Metrics Calculation ---
+   metrics_image_tensorflow = ExplanationMetricsImage(
+      model=model_tf,  # Use TensorFlow model for TensorFlow example
+      data_loader=train_dataset_tf,
+      framework="tensorflow",
+      num_classes=10
+   )
+
+   # Example: Calculate metrics using the TensorFlow Dataset
+   metrics_results_tensorflow = metrics_image_tensorflow.evaluate(
+      start_idx=0, end_idx=32, 
+      metric_names=["FaithfulnessCorrelation","MaxSensitivity","MPRT","SmoothMPRT","AvgSensitivity","FaithfulnessEstimate"],
+      xai_method_name="GradCAM"
+   )
+   print("TensorFlow Example Metrics:", metrics_results_tensorflow)
+   # --- Example 3: Explain using a single image (numpy array) ---
+   single_image_numpy = np.random.randn(1,3,32, 32)  # Random image as a NumPy array, [H, W, C]
+   label = np.random.randint(0, 9,size=1)
+
+   # Initialize ExplanationMetricsImage for a single image (use PyTorch framework even for NumPy array)
+   metrics_image_single = ExplanationMetricsImage(
+      model=model_torch,  # Use PyTorch model
+      data_loader=(single_image_numpy,label),  # Pass the single image as a numpy array
+      framework="torch",  # Use the torch framework for single image
+      num_classes=10,
+   )
+
+   # Calculate metrics for the single image
+   metrics_single_image = metrics_image_single.evaluate(
+      start_idx=0, end_idx=1, 
+      metric_names=["FaithfulnessCorrelation","MaxSensitivity","MPRT","SmoothMPRT","AvgSensitivity","FaithfulnessEstimate"],
+      xai_method_name="IntegratedGradients",
+      channel_first=True
+   )
+   print("Single Image Example Metrics:", metrics_single_image)
+   # --- Example 4: TensorFlow Model with Single Image ---
+   single_image_numpy = np.random.randn(1,32, 32,3)  # Random image as a NumPy array, [H, W, C]
+   label = np.random.randint(0, 9,size=1)
+   # For TensorFlow, the single image example using TensorFlow framework
+   metrics_image_single_tf = ExplanationMetricsImage(
+      model=model_tf,  # Use TensorFlow model
+      data_loader=(single_image_numpy,label),  # Pass the single image as a numpy array
+      framework="tensorflow",  # Use the tensorflow framework for single image
+      num_classes=10
+   )
+
+   # Calculate metrics for the single image
+   metrics_single_image_tf = metrics_image_single_tf.evaluate(
+      start_idx=0, end_idx=1, 
+      metric_names=["FaithfulnessCorrelation","MaxSensitivity","MPRT","SmoothMPRT","AvgSensitivity","FaithfulnessEstimate"],
+      xai_method_name="GradCAM",
+      channel_first=True
+   )
+   print("TensorFlow Single Image Example Metrics:", metrics_single_image_tf)
+
+
+   ```
+
+---
+
+#### Explanation Metrics Overview
+
+The **`ExplanationMetricsImage`** class supports the following key metrics for evaluating image explanations:
+
+| **Metric**               | **Purpose**                                                                                     | **Description**                                                                                           |
+|--------------------------|-------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------|
+| **FaithfulnessCorrelation** | Measures the correlation between attribution values and model output changes when perturbing image features. | Higher values indicate that important features (according to the explanation) indeed cause significant changes in the model’s prediction. |
+| **MaxSensitivity**        | Measures the maximum sensitivity of an attribution method to input perturbations.                | Higher values suggest that the attribution method highlights the most sensitive parts of the image.       |
+| **MPRT**                  | Measures the relevance of features based on perturbations.                                       | Helps evaluate the robustness of the explanation when features are perturbed.                              |
+| **SmoothMPRT**            | A smoother version of MPRT that reduces noise from perturbations.                                | Ensures more stable results by averaging perturbations.                                                   |
+| **AvgSensitivity**        | Measures the average sensitivity of the model to input perturbations across all features.        | Indicates how sensitive the model is to small changes in the input.                                       |
+| **FaithfulnessEstimate**  | Estimates the faithfulness of the attribution by comparing against a perturbation baseline.     | Compares how well the explanation reflects the model’s behavior under feature perturbations.               |
+
+Reference Values for Available Metrics:
+
+| Metric                   | Typical Range           | Interpretation                                                                                           | "Better" Direction                   |
+|--------------------------|-------------------------|---------------------------------------------------------------------------------------------------------|--------------------------------------|
+| FaithfulnessCorrelation   | -1 to 1                 | Measures correlation between attribution values and changes in model output when features are perturbed. Higher indicates that more important features (according to the explanation) indeed cause larger changes in the model’s prediction. | Higher is better (closer to 1)       |
+| MaxSensitivity            | ≥ 0                     | Measures how well attributions match model sensitivity when perturbing image features. Lower scores indicate that the explanations focus on the most sensitive features. | Lower is better (closer to 0)        |
+| MPRT                      | ≥ 0                     | Measures how the perturbation of features affects the model’s prediction. A higher score indicates that the model's prediction is heavily influenced by the perturbed features. | Higher is better                    |
+| SmoothMPRT                | ≥ 0                     | Measures the stability of MPRT under perturbation noise. Higher values suggest more stable explanations. | Higher is better                    |
+| AvgSensitivity            | ≥ 0                     | Measures the average change in prediction for small changes in input features. Indicates model robustness. | Lower is better                     |
+| FaithfulnessEstimate      | 0 to 1                   | Compares model predictions under perturbations and attributions. Higher values indicate better alignment. | Higher is better                    |
+
+---
+
+#### Initialization Attributes / Contructor for **`ExplanationMetricsImage`** class
+
+| **Attribute**        | **Description**                                                                                          | **Values**                                                                                           |
+|----------------------|----------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------|
+| `model`              | The trained model for which explanations will be evaluated.                                                | [PyTorch model, TensorFlow model]                                                                    |
+| `data_loader`        | The data loader or dataset containing the test data.                                                      | [PyTorch Dataset,PyTorch DataLoader,TensorFlow Dataset, tuple of (image-np.array/torch.Tensor/tensorflow.Tensor.Tensor,label-np.array/torch.Tensor/tensorflow.Tensor)]                                                |
+| `framework`          | The framework used for the model (either 'torch' or 'tensorflow').                                         | {'torch', 'tensorflow'}                                                                               |
+| `device`             | The device (CPU/GPU) used for performing computations (for PyTorch models).                               | [torch.device (Optional)]                                                                             |
+| `num_classes`        | The number of classes for classification tasks.                                                           | Integer (default: 10)                                                                                 |
+
+---
+
+#### Evaluate Function (`evaluate`) for **`ExplanationMetricsImage`** class to calculate metrics
+
+| **Attribute**         | **Description**                                                                                          | **Values**                                                                                           |
+|-----------------------|----------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------|
+| `start_idx`           | The starting index of the batch for evaluation.                                                           | Integer (e.g., 0)                                                                                   |
+| `end_idx`             | The ending index of the batch for evaluation.                                                             | Integer (e.g., 100, or `None` for the entire batch)                                                  |
+| `metric_names`        | The list of metric names to evaluate.                                                                     | List of strings representing the metrics to compute (e.g., `["FaithfulnessCorrelation", "MaxSensitivity", "MPRT", "SmoothMPRT", "AvgSensitivity", "FaithfulnessEstimate"]`)        |
+| `xai_method_name`     | The name of the XAI method used for explanations (e.g., 'IntegratedGradients', 'GradCAM', etc.).           | String (e.g., for Torch `{grad_cam, integrated_gradients, saliency, deep_lift, gradient_shap, guided_backprop, occlusion, layer_gradcam, feature_ablation}` and for Tensorflow `{VanillaGradients, GradCAM,GradientsInput,IntegratedGradients,OcclusionSensitivity,SmoothGrad}`)                                                      |
+| `channel_first`       | A flag to indicate if the input data is in channel-first format (PyTorch) or channel-last format (TensorFlow). | Boolean (default: False)                                                                              |
+
+---
+
+
+
+#### Practical Examples
+
+**1. Faithfulness Correlation**
+   - Correlates feature attributions with prediction changes when features (pixels) in the image are perturbed.
+   - Higher correlation indicates that the explanation aligns well with model predictions.
+
+   ```python
+   faithfulness_score = metrics_image.evaluate(
+       start_idx=0, end_idx=5, metric_names=["FaithfulnessCorrelation"], xai_method_name="IntegratedGradients"
+   )['FaithfulnessCorrelation']
+   print("Faithfulness:", faithfulness_score)
+   ```
+
+**2. Max Sensitivity**
+   - Measures the sensitivity of the explanation method by observing the effect of perturbing different parts of the image.
+   - A higher score indicates that the explanation method is sensitive to the most influential pixels.
+
+   ```python
+   max_sensitivity_score = metrics_image.evaluate(
+       start_idx=0, end_idx=5, metric_names=["MaxSensitivity"], xai_method_name="IntegratedGradients"
+   )['MaxSensitivity']
+   print("Max Sensitivity:", max_sensitivity_score)
+   ```
+
+---
+
+#### Example Output
+
+After calculating the metrics, the method returns a dictionary summarizing the results:
+
+| Metric                   | Value   |
+|--------------------------|---------|
+| FaithfulnessCorrelation   | 0.88    |
+| MaxSensitivity            | 0.92    |
+
+---
+
 #### Benefits of ExplanationMetrics
 
 - **Interpretability:** Quantifies how well feature attributions explain the model's predictions.
@@ -348,19 +958,22 @@ By leveraging these metrics, you can ensure that your explanations are meaningfu
 
 ---
 
-## Extending with More Explanations
+### Acknowledgements
 
-We plan to expand this library to include more explanation methods, such as:
+We would like to extend our heartfelt thanks to the developers and contributors of the libraries **[Quantus](https://github.com/Trusted-AI/quantus)**, **[Captum](https://captum.ai/)**, **[tf-explain](https://github.com/sicara/tf-explain)**, **[LIME](https://github.com/marcotcr/lime)**, and **[SHAP](https://github.com/slundberg/shap)**, which have been instrumental in enabling the explainability methods implemented in this package.
 
-- **Integrated Gradients**: An attribution method for deep learning models.
-- **DeepLIFT**: A method designed for deep learning models that calculates the contribution of each feature to the model's prediction.
-- **KernelSHAP**: A kernel-based approximation of SH
+- **[Quantus](https://github.com/Trusted-AI/quantus)** provides a comprehensive suite of metrics that allow us to evaluate and assess the quality of explanations, ensuring that our interpretability methods are both reliable and robust.
+  
+- **[Captum](https://captum.ai/)** is an invaluable tool for PyTorch users, offering a variety of powerful attribution methods like Integrated Gradients, Saliency, and Gradient Shap, which are crucial for generating insights into the inner workings of deep learning models.
 
-AP values that can be applied to any model.
+- **[tf-explain](https://github.com/sicara/tf-explain)** simplifies the process of explaining TensorFlow/Keras models, with methods like GradCAM and Occlusion Sensitivity, enabling us to generate visual explanations that help interpret the decision-making of complex models.
 
-As we add more explanation methods, the `SHAPExplainer` and `LIMEExplainer` classes will be extended to support them, and new classes may be added for other explanation techniques.
+- **[LIME](https://github.com/marcotcr/lime)** (Local Interpretable Model-Agnostic Explanations) has been a key library for providing local explanations for machine learning models, allowing us to generate understandable explanations for individual predictions.
 
----
+- **[SHAP](https://github.com/slundberg/shap)** (SHapley Additive exPlanations) is essential for computing Shapley values and provides a unified approach to explaining machine learning models, making it easier to understand feature contributions across a range of model types.
+
+We are deeply grateful for the contributions these libraries have made in advancing model interpretability, and their seamless integration in our package ensures that users can leverage state-of-the-art methods for understanding machine learning and deep learning models.
+
 
 ## License
 

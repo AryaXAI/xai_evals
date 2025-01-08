@@ -19,17 +19,311 @@ from lightgbm import LGBMClassifier
 from xgboost import XGBClassifier
 import tensorflow as tf
 import xgboost as xgb
+from tf_explain.core.grad_cam import GradCAM
+from tf_explain.core.occlusion_sensitivity import OcclusionSensitivity
 from dl_backtrace.tf_backtrace import Backtrace as TFBacktrace
 from dl_backtrace.pytorch_backtrace import Backtrace as TorchBacktrace
 from captum.attr import (
-    IntegratedGradients,
-    DeepLift,
-    GradientShap,
-    Saliency,
-    InputXGradient,
-    GuidedBackprop,
+    IntegratedGradients, Saliency, DeepLift, GuidedBackprop, InputXGradient,
+    DeepLiftShap, GradientShap, Deconvolution, GuidedGradCam, LayerGradCam,
+    Occlusion, FeatureAblation, ShapleyValueSampling, ShapleyValues, NoiseTunnel
 )
+from captum.attr import LayerAttribution
 
+class BacktraceImageExplainer:
+    def __init__(self, model,):
+        self.model = model
+        # Automatically detect whether the model is TensorFlow or PyTorch
+        if isinstance(self.model, tf.keras.Model):  # TensorFlow model
+            self.framework = "tensorflow"
+            self.backtrace = TFBacktrace(model=model)
+            self.inp_layer = self.backtrace.model_resource["inputs"][0]
+        elif isinstance(self.model, torch.nn.Module):  # PyTorch model
+            self.framework = "pytorch"
+            self.backtrace = TorchBacktrace(model=model)
+            self.inp_layer = 'identity'
+        else:
+            raise ValueError("Unsupported model type. Only TensorFlow and PyTorch models are supported.")
+    
+    def get_last_conv_layer(self,model):
+        last_conv = None
+        for name, module in model.named_modules():
+            if isinstance(module, torch.nn.Conv2d):
+                last_conv = module
+        return last_conv
+    
+    
+    def explain(self, test_data, instance_idx=0,mode='default',scaler=1,thresholding=0,task='binary-classification',contrast_mode='Positive'):
+        relevance = None
+        self.test_data = test_data
+        self.instance_idx = instance_idx
+        self.mode = mode
+        self.scaler = scaler
+        self.thresholding = thresholding
+        self.task = task
+        if self.mode == 'contrast':
+            self.contrast_mode = contrast_mode
+        else:
+            self.contrast_mode = None
+
+        if isinstance(self.test_data, torch.utils.data.DataLoader):
+            dataset = self.test_data.dataset
+            image, label = dataset[self.instance_idx]
+            instance = image.unsqueeze(0).to(next(self.model.parameters()).device)  # [1, C, H, W]
+            label = label
+
+        # If input is a Tensor or NumPy array (single image), use the provided data
+        elif isinstance(self.test_data, torch.Tensor):
+            image = self.test_data[self.instance_idx] if instance_idx is not None else test_data
+            instance = image.unsqueeze(0).to(next(self.model.parameters()).device)  # [1, C, H, W]
+            label = None  # For single image, label can be None or passed externally
+
+        elif isinstance(self.test_data, np.ndarray):
+            image = self.test_data[self.instance_idx] if instance_idx is not None else test_data
+            instance = np.expand_dims(image, 0)
+            label = None  # For single image, label can be None or passed externally
+
+        else:
+            raise ValueError("Invalid test data type. Must be Tensor, NumPy array, or DataLoader.")
+
+        if self.framework == "pytorch":
+            instance = torch.tensor(instance, dtype=torch.float32)
+
+        # Step 1: Get the layer outputs using the Backtrace model
+        layer_outputs = self.backtrace.predict(instance)
+        
+        # Step 2: Get the layer-wise relevance using DLBacktrace
+        relevance = self.backtrace.eval(
+            layer_outputs,
+            mode=self.mode,
+            scaler=self.scaler,
+            thresholding=self.thresholding,
+            task=self.task
+        )
+
+        if self.framework == "pytorch":
+            if self.mode == 'default':
+                attr_2d = np.mean(relevance[self.inp_layer],axis=-3)
+            elif self.mode == 'contrast':
+                attr_2d = np.mean(relevance[self.inp_layer][self.contrast_mode],axis=-3)
+            else:
+                attr_2d = np.mean(relevance[self.inp_layer],axis=-3)
+        else:
+            # Aggregate attributions over channels (RGB) by taking the mean
+            if self.mode == 'default':
+                attr_2d = np.mean(relevance[self.inp_layer],axis=-1)
+            elif self.mode == 'contrast':
+                attr_2d = np.mean(relevance[self.inp_layer][self.contrast_mode],axis=-1)
+            else:
+                attr_2d = np.mean(relevance[self.inp_layer],axis=-1)
+
+        return attr_2d
+
+class TorchImageExplainer:
+    """
+    Wrapper for Captum explainers.
+    """
+    def __init__(self, model):
+        self.model = model
+        self.model.eval()
+        self.last_conv_layer = self.get_last_conv_layer(model)
+
+    def get_last_conv_layer(self,model):
+        """
+        Retrieves the last convolutional layer of the model.
+        
+        Args:
+            model (nn.Module): The CNN model.
+        
+        Returns:
+            nn.Module: The last convolutional layer.
+        """
+        last_conv = None
+        for name, module in model.named_modules():
+            if isinstance(module, torch.nn.Conv2d):
+                last_conv = module
+        return last_conv
+
+    def explain(self, testdata, idx=None, method="grad_cam", task="classification"):
+        """
+        Generates attributions for a specific test sample using a specified method.
+        
+        Args:
+            testloader (DataLoader): DataLoader for test data.
+            idx (int): Index of the test sample.
+            method (str): Attribution method to use.
+            task (str): Task type, default is "classification".
+        
+        Returns:
+            np.ndarray: 2D attribution map.
+        """
+        # If input is a DataLoader (batch of images), extract the specific image and label
+        if isinstance(testdata, torch.utils.data.DataLoader):
+            dataset = testdata.dataset
+            image, label = dataset[idx]
+            image = image.unsqueeze(0).to(next(self.model.parameters()).device)  # [1, C, H, W]
+            label = label
+
+        # If input is a Tensor or NumPy array (single image), use the provided data
+        elif isinstance(testdata, torch.Tensor):
+            image = testdata[idx] if idx is not None else testdata
+            image = image.unsqueeze(0).to(next(self.model.parameters()).device)  # [1, C, H, W]
+            label = None  # For single image, label can be None or passed externally
+
+        elif isinstance(testdata, np.ndarray):
+            image = testdata[idx] if idx is not None else testdata
+            image = torch.tensor(image).float().unsqueeze(0).to(next(self.model.parameters()).device)  # [1, C, H, W]
+            label = None  # For single image, label can be None or passed externally
+
+        else:
+            raise ValueError("Invalid test data type. Must be Tensor, NumPy array, or DataLoader.")
+
+
+        with torch.no_grad():
+            logits = self.model(image)
+            preds = torch.softmax(logits, dim=1)
+            pred_class = torch.argmax(preds, dim=1).item()
+
+        baseline = torch.zeros_like(image).to(image.device)
+
+        if method == "integrated_gradients":
+            explainer = IntegratedGradients(self.model)
+            attributions = explainer.attribute(image, baselines=baseline, target=pred_class)
+        elif method == "saliency":
+            explainer = Saliency(self.model)
+            attributions = explainer.attribute(image, target=pred_class)
+        elif method == "deep_lift":
+            explainer = DeepLift(self.model)
+            attributions = explainer.attribute(image, baselines=baseline, target=pred_class)
+        elif method == "guided_backprop":
+            explainer = GuidedBackprop(self.model)
+            attributions = explainer.attribute(image, target=pred_class)
+        elif method == "input_x_gradient":
+            explainer = InputXGradient(self.model)
+            attributions = explainer.attribute(image, target=pred_class)
+        elif method == "deep_lift_shap":
+            explainer = DeepLiftShap(self.model)
+            #baselines = [torch.randn_like(image)*0.1 for _ in range(5)]
+            baseline = torch.randn_like(image).repeat(5, 1, 1, 1) * 0.1  # Shape: [5, C, H, W]
+            attributions = explainer.attribute(image, baselines=baseline, target=pred_class)
+        elif method == "gradient_shap":
+            explainer = GradientShap(self.model)
+            #baselines = [torch.randn_like(image)*0.1 for _ in range(5)]
+            baseline = torch.randn_like(image) * 0.1
+            attributions = explainer.attribute(image, baselines=baseline, target=pred_class, stdevs=0.09)
+        elif method == "deconvolution":
+            explainer = Deconvolution(self.model)
+            attributions = explainer.attribute(image, target=pred_class)
+        elif method == "guided_gradcam":
+            explainer = GuidedGradCam(self.model, self.last_conv_layer)
+            attributions = explainer.attribute(image, target=pred_class)
+        elif method == "layer_gradcam":
+            explainer = LayerGradCam(self.model, self.last_conv_layer)
+            attributions = explainer.attribute(image, target=pred_class)
+            attributions = LayerAttribution.interpolate(attributions, image.shape[2:])
+        elif method == "occlusion":
+            explainer = Occlusion(self.model)
+            attributions = explainer.attribute(
+                image, target=pred_class, baselines=baseline, 
+                sliding_window_shapes=(3,8,8)
+            )
+        elif method == "feature_ablation":
+            explainer = FeatureAblation(self.model)
+            attributions = explainer.attribute(image, target=pred_class, baselines=baseline)
+        elif method == "shapley_value_sampling":
+            explainer = ShapleyValueSampling(self.model)
+            attributions = explainer.attribute(image, target=pred_class, baselines=baseline, n_samples=50)
+        elif method == "shapley_values":
+            explainer = ShapleyValues(self.model)
+            attributions = explainer.attribute(image, target=pred_class, baselines=baseline)
+        elif method == "noise_tunnel":
+            base_explainer = IntegratedGradients(self.model)
+            explainer = NoiseTunnel(base_explainer)
+            attributions = explainer.attribute(
+                image, 
+                target=pred_class, 
+                nt_type='smoothgrad',   # Type of noise (can also be 'vanilla')
+                stdevs=0.02            # Standard deviation of noise
+            )
+        else:
+            raise ValueError("Unsupported method")
+
+        # Aggregate attributions over channels (RGB) by taking the mean
+        attr_2d = attributions.mean(dim=1).squeeze(0).detach().cpu().numpy()
+        return attr_2d
+
+# TFImageExplainer Implementation
+class TFImageExplainer:
+    """
+    Wrapper for tf-explain explainers for TensorFlow models.
+    Handles both single image and dataset cases.
+    """
+    def __init__(self, model):
+        """
+        Initializes the explainer with a TensorFlow model.
+        """
+        self.model = model
+        self.model.trainable = False  # Set model to inference mode
+        self.last_conv_layer = self._get_last_conv_layer()
+        self.is_single_image = False
+
+    def _get_last_conv_layer(self):
+        """
+        Get the last convolutional layer of the model for GradCAM.
+        """
+        for layer in reversed(self.model.layers):
+            if isinstance(layer, tf.keras.layers.Conv2D):
+                return layer
+        raise ValueError("No convolutional layer found in the model")
+
+    def explain(self, testset, idx=None, method="grad_cam",task=None,label=0):
+        """
+        Generates attributions for a specific test sample using a specified method.
+        """
+        # Check if the input is a single image (NumPy array or TensorFlow tensor)
+                # Determine class index
+        if isinstance(testset, (np.ndarray, tf.Tensor)):
+            # If idx is None, process the entire single image
+            if idx is not None:
+                raise ValueError("For single image input, idx should be None.")
+            image = testset
+            self.is_single_image = True
+            class_index = int(label)
+        elif isinstance(testset, tf.data.Dataset):
+            # If it's a TensorFlow Dataset, handle idx
+            self.is_single_image = False
+            batch = list(testset.take(idx // testset.cardinality().numpy() + 1))[-1]  # Retrieve the required batch
+            images, labels = batch
+
+            # Get the specific image and label from the batch
+            image = images[idx % images.shape[0]]
+            label = labels[idx % images.shape[0]]
+            class_index = int(label)
+        else:
+            raise ValueError("Unsupported input type. Expected a NumPy array, TensorFlow tensor, or Dataset.")
+
+        image = tf.expand_dims(image, axis=0)  # This ensures the image has shape (1, height, width, channels)
+        image_numpy = image.numpy()  # Convert to NumPy for compatibility with tf-explain
+
+        # Choose the appropriate explanation method
+        if method == "grad_cam":
+            explainer = GradCAM()
+            if class_index is None:
+                raise ValueError("class_index must be provided for GradCAM in classification tasks.")
+            attributions = explainer.explain((image_numpy, None), self.model, class_index=class_index, layer_name=self.last_conv_layer.name)
+
+        elif method == "occlusion":
+            explainer = OcclusionSensitivity()
+            if class_index is None:
+                raise ValueError("class_index must be provided for OcclusionSensitivity in classification tasks.")
+            attributions = explainer.explain((image_numpy, None), self.model, class_index=class_index, patch_size=8)
+
+        else:
+            raise ValueError(f"Unsupported method: {method}")
+
+        # Convert the attribution to 2D by averaging over channels (RGB)
+        attr_2d = np.mean(attributions, axis=-1)  # This collapses the channels to provide a 2D map
+        return attr_2d
 
 class SHAPExplainer:
     def __init__(self, model, features, task="binary-classification", X_train=None,classification_threshold=0.5,subset_samples=False,subset_number=100):

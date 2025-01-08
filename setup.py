@@ -17,7 +17,9 @@ setup(
         'catboost==1.2.7',
         'lightgbm==4.5.0',
         'tensorflow==2.14.0',
-        'captum==0.7.0'
+        'captum==0.7.0',
+        'tf-explain',
+        'quantus'
 
     ],
     description="A package for model explainability and explainability comparision for tabular data",

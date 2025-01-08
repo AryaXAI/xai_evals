@@ -4,8 +4,251 @@ import torch
 import tensorflow as tf
 from xai_evals.explainer import LIMEExplainer, SHAPExplainer, BacktraceExplainer, TorchExplainer, TFExplainer
 from sklearn.base import is_regressor, is_classifier
+import tensorflow as tf
+from tf_explain.core import IntegratedGradients, VanillaGradients, GradCAM, SmoothGrad, OcclusionSensitivity
+import numpy as np
+import quantus
+from tensorflow.keras.utils import to_categorical
 
-class ExplanationMetrics:
+class ExplanationMetricsImage:
+    """
+    A wrapper class to evaluate explanations using Quantus metrics, supporting both PyTorch and TensorFlow models.
+    """
+
+    def __init__(self, model, data_loader, framework="torch", device=None, num_classes=10):
+        """
+        Initializes the wrapper with the model, dataset, and framework.
+
+        Args:
+            model (torch.nn.Module or tf.keras.Model): The trained model.
+            data_loader (DataLoader or tf.data.Dataset): DataLoader for test data.
+            framework (str): Framework of the model ('torch' or 'tensorflow').
+            device (torch.device, optional): Device to perform computations (for PyTorch models).
+        """
+        self.model = model
+        self.data_loader = data_loader
+        self.framework = framework.lower()
+        self.device = device
+        self.num_classes = num_classes
+
+        if self.framework == "torch":
+            self.model.eval()
+            
+        # Predefined configuration for metrics
+        self.metrics_config = {
+            "FaithfulnessCorrelation": quantus.FaithfulnessCorrelation(subset_size=16),
+            "MaxSensitivity": quantus.MaxSensitivity(disable_warnings=True),
+            "MPRT": quantus.MPRT(disable_warnings=True),
+            "SmoothMPRT": quantus.SmoothMPRT(disable_warnings=True),
+            "AvgSensitivity": quantus.AvgSensitivity(disable_warnings=True),
+            "FaithfulnessEstimate": quantus.FaithfulnessEstimate(perturb_baseline="black", normalise=True),
+        }
+ 
+        # Predefined configuration for explanation methods
+        if self.framework == "torch":
+            self.xai_methods_config = {
+                "IntegratedGradients": {"xai_lib": "captum", "method": "IntegratedGradients"},
+                "Saliency": {"xai_lib": "captum", "method": "Saliency"},
+                "DeepLift": {"xai_lib": "captum", "method": "DeepLift"},
+                "GradientShap": {"xai_lib": "captum", "method": "GradientShap"},
+                "Occlusion": {"xai_lib": "captum", "method": "Occlusion"},
+                'DeepLiftShap': {"xai_lib": "captum", "method": "DeepLiftShap"},
+                'InputXGradient': {"xai_lib": "captum", "method": "InputXGradient"},
+                'Saliency': {"xai_lib": "captum", "method": "Saliency"},
+                'FeatureAblation': {"xai_lib": "captum", "method": "FeatureAblation"},
+                'Deconvolution': {"xai_lib": "captum", "method": "Deconvolution"},
+                'FeaturePermutation': {"xai_lib": "captum", "method": "FeaturePermutation"},
+                'Lime': {"xai_lib": "captum", "method": "Lime"},
+                'KernelShap': {"xai_lib": "captum", "method": "KernelShap"},
+                'LRP': {"xai_lib": "captum", "method": "LRP"},
+                'Gradient': {"xai_lib": "captum", "method": "Gradient"},
+                'LayerGradCam': {"xai_lib": "captum", "method": "LayerGradCam"},
+                'GuidedGradCam': {"xai_lib": "captum", "method": "GuidedGradCam"},
+                'LayerConductance': {"xai_lib": "captum", "method": "LayerConductance"},
+                'LayerActivation': {"xai_lib": "captum", "method": "LayerActivation"},
+                'InternalInfluence': {"xai_lib": "captum", "method": "InternalInfluence"},
+                'LayerGradientXActivation': {"xai_lib": "captum", "method": "LayerGradientXActivation"},
+                'Control Var. Sobel Filter': {"xai_lib": "captum", "method": "Control Var. Sobel Filter"},
+                'Control Var. Constant': {"xai_lib": "captum", "method": "Control Var. Constant"},
+                'Control Var. Random Uniform': {"xai_lib": "captum", "method": "Control Var. Random Uniform"},
+            }
+        elif self.framework == "tensorflow":
+            self.xai_methods_config = {
+                "VanillaGradients": {"xai_lib": "tf-explain", "method": "VanillaGradients"},
+                "GradCAM": {"xai_lib": "tf-explain", "method": "GradCAM"},
+                "GradientsInput": {"xai_lib": "tf-explain", "method": "VanillaGradients"},
+                "IntegratedGradients": {"xai_lib": "tf-explain", "method": "IntegratedGradients"},
+                "OcclusionSensitivity": {"xai_lib": "tf-explain", "method": "OcclusionSensitivity"},
+                "SmoothGrad": {"xai_lib": "tf-explain", "method": "SmoothGrad"},
+            }
+        else:
+            raise ValueError(f"Unsupported framework: {framework}")
+
+    def evaluate(self, start_idx, end_idx, metric_names, xai_method_name,channel_first=False):
+        """
+        Evaluates a list of Quantus metrics on a batch of samples.
+
+        Args:
+            start_idx (int): Start index of the batch from the data loader.
+            end_idx (int): End index of the batch from the data loader.
+            metric_names (list): List of metric names to evaluate.
+            xai_method_name (str): Name of the XAI method.
+
+        Returns:
+            dict: Aggregated scores for each metric.
+        """
+        # Prepare batch data
+        self.channel_first = channel_first
+        x_batch, y_batch = self._prepare_data(start_idx, end_idx)
+
+        # Ensure the selected XAI method and metrics exist
+        if xai_method_name not in self.xai_methods_config:
+            raise ValueError(f"XAI method '{xai_method_name}' is not configured.")
+        if not all(metric in self.metrics_config for metric in metric_names):
+            raise ValueError("One or more metrics are not configured.")
+
+        # Prepare XAI method and metric instances
+        explain_func_kwargs = self.xai_methods_config[xai_method_name]
+        metrics = {name: self.metrics_config[name] for name in metric_names}
+
+        # Compute scores for each metric
+        aggregated_scores = {}
+        for metric_name, metric in metrics.items():
+            raw_scores = metric(
+                model=self.model,
+                x_batch=x_batch,
+                y_batch=y_batch,
+                device=self.device,
+                explain_func=quantus.explain,
+                explain_func_kwargs=explain_func_kwargs,
+                channel_first=self.channel_first,
+            )
+            if metric_name == "Continuity":
+                aggregated_scores[metric_name] = self._aggregate_continuity_scores(raw_scores)
+            elif metric_name == "MPRT" or metric_name == "SmoothMPRT":
+                aggregated_scores[metric_name] = self._aggregate_MPRT_scores(raw_scores)
+            else:
+                aggregated_scores[metric_name] = (
+                    np.nanmean(raw_scores) if isinstance(raw_scores, list) else raw_scores
+                )
+
+        return aggregated_scores
+
+    def _prepare_data(self, start_idx, end_idx):
+        """
+        Prepares a batch of data for Quantus evaluation.
+
+        Args:
+            start_idx (int): Start index of the batch.
+            end_idx (int): End index of the batch.
+
+        Returns:
+            tuple: x_batch (numpy.ndarray, torch.Tensor, or tf.Tensor), y_batch (numpy.ndarray, torch.Tensor, or tf.Tensor)
+        """
+        x_batch, y_batch = [], []
+
+        # Case 1: PyTorch DataLoader (torch.utils.data.DataLoader)
+        if isinstance(self.data_loader, torch.utils.data.DataLoader):
+            dataset = self.data_loader.dataset
+            for idx in range(start_idx, end_idx):
+                image, label = dataset[idx]
+                x_batch.append(image.numpy())
+                y_batch.append(label)
+            
+            # Convert to the correct type (either torch.Tensor or numpy array)
+            x_batch = np.stack(x_batch)
+            y_batch = np.array(y_batch)
+
+        # Case 2: TensorFlow DataLoader (tf.data.Dataset)
+        elif isinstance(self.data_loader, tf.data.Dataset):
+            #data = list(self.data_loader.unbatch().take(end_idx - start_idx).as_numpy_iterator())
+            data = list(self.data_loader.skip(start_idx).unbatch().take(end_idx - start_idx).as_numpy_iterator())
+            x_batch, y_batch = zip(*data)
+            x_batch = np.stack(x_batch)
+            y_batch = np.array(y_batch)
+
+            # Ensure labels are non-categorical integers (0, 1, 2, ...)
+            if len(y_batch.shape) > 1 :
+                y_batch = to_categorical(y_batch)
+                y_batch = np.argmax(y_batch, axis=1)
+
+        # Case 3: Tuple (numpy.ndarray, numpy.ndarray) or (torch.Tensor, torch.Tensor)
+        elif isinstance(self.data_loader, tuple):
+            data, labels = self.data_loader
+            if end_idx > start_idx:
+                if start_idx == 0 and end_idx == 1:
+                    x_batch = data
+                    y_batch = labels
+                else:
+                    x_batch = data[start_idx:end_idx]
+                    y_batch = labels[start_idx:end_idx]
+
+            # Ensure the data and labels are in the correct format
+            #if isinstance(x_batch, np.ndarray):
+            #x_batch = torch.tensor(x_batch, dtype=torch.float32)
+
+            if isinstance(x_batch, torch.Tensor):
+                x_batch = x_batch.numpy()
+            elif isinstance(x_batch, tf.Tensor):
+                x_batch = x_batch.numpy()
+            
+
+            if isinstance(y_batch, torch.Tensor):
+                y_batch = y_batch.numpy()
+            elif isinstance(y_batch, tf.Tensor):
+                y_batch = y_batch.numpy()
+
+            # Ensure labels are non-categorical (integer labels)
+            if len(y_batch.shape) > 1 :
+                y_batch = to_categorical(y_batch)
+                y_batch = np.argmax(y_batch, axis=1)
+
+        # Case 4: Raw PyTorch Dataset (torch.utils.data.Dataset)
+        elif isinstance(self.data_loader, torch.utils.data.Dataset):
+            x_batch, y_batch = [], []
+            for idx in range(start_idx, end_idx):
+                image, label = self.data_loader[idx]
+                x_batch.append(image)
+                y_batch.append(label)
+
+            # Convert lists to tensors or numpy arrays
+            x_batch = np.stack(x_batch)
+            y_batch = np.array(y_batch)
+
+        # Case 5: Invalid Data Type
+        else:
+            raise ValueError("Invalid data type. Expected DataLoader, Dataset, or Tuple of arrays.")
+
+        return x_batch, y_batch
+
+
+
+    def _aggregate_continuity_scores(self, scores):
+        """
+        Aggregates the dictionary-based Continuity scores.
+
+        Args:
+            scores (dict): Continuity score dictionary.
+
+        Returns:
+            float: Aggregated score (mean across all keys and values).
+        """
+        all_values = []
+        for key, value in scores.items():
+            if isinstance(value, list):
+                all_values.extend(value)
+            elif isinstance(value, dict):  # Nested dictionary case
+                for sub_key, sub_value in value.items():
+                    if isinstance(sub_value, list):
+                        all_values.extend(sub_value)
+        return np.nanmean(all_values)
+    def _aggregate_MPRT_scores(self, scores):
+        mprt_dict = {}
+        for key, value in scores.items():
+            mprt_dict[key] = np.nanmean(np.array(value))
+        return mprt_dict
+
+class ExplanationMetricsTabular:
     def __init__(self, 
                  model, 
                  explainer_name, 
