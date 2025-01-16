@@ -9,6 +9,10 @@ from tf_explain.core import IntegratedGradients, VanillaGradients, GradCAM, Smoo
 import numpy as np
 import quantus
 from tensorflow.keras.utils import to_categorical
+from dl_backtrace.tf_backtrace import Backtrace as TFBacktrace
+from dl_backtrace.pytorch_backtrace import Backtrace as TorchBacktrace
+from xai_evals.utils import backtrace_quantus
+
 
 class ExplanationMetricsImage:
     """
@@ -81,6 +85,8 @@ class ExplanationMetricsImage:
                 "OcclusionSensitivity": {"xai_lib": "tf-explain", "method": "OcclusionSensitivity"},
                 "SmoothGrad": {"xai_lib": "tf-explain", "method": "SmoothGrad"},
             }
+        elif self.framework == "backtrace":
+            print("backtrace")
         else:
             raise ValueError(f"Unsupported framework: {framework}")
 
@@ -101,38 +107,79 @@ class ExplanationMetricsImage:
         self.channel_first = channel_first
         x_batch, y_batch = self._prepare_data(start_idx, end_idx)
 
-        # Ensure the selected XAI method and metrics exist
-        if xai_method_name not in self.xai_methods_config:
-            raise ValueError(f"XAI method '{xai_method_name}' is not configured.")
-        if not all(metric in self.metrics_config for metric in metric_names):
-            raise ValueError("One or more metrics are not configured.")
+        if self.framework == "backtrace":
+            if isinstance(self.model, tf.keras.Model):  # TensorFlow model
+                self.backtrace_intitial = TFBacktrace(model=self.model)
+            elif isinstance(self.model, torch.nn.Module):  # PyTorch model
+                self.backtrace_intitial = TorchBacktrace(model=self.model)
 
-        # Prepare XAI method and metric instances
-        explain_func_kwargs = self.xai_methods_config[xai_method_name]
-        metrics = {name: self.metrics_config[name] for name in metric_names}
-
-        # Compute scores for each metric
-        aggregated_scores = {}
-        for metric_name, metric in metrics.items():
-            raw_scores = metric(
-                model=self.model,
-                x_batch=x_batch,
-                y_batch=y_batch,
-                device=self.device,
-                explain_func=quantus.explain,
-                explain_func_kwargs=explain_func_kwargs,
-                channel_first=self.channel_first,
-            )
-            if metric_name == "Continuity":
-                aggregated_scores[metric_name] = self._aggregate_continuity_scores(raw_scores)
-            elif metric_name == "MPRT" or metric_name == "SmoothMPRT":
-                aggregated_scores[metric_name] = self._aggregate_MPRT_scores(raw_scores)
+        # Wrapper to integrate Backtrace with Quantus
+            
+            if xai_method_name == "default":
+                mode = "default"
+            elif xai_method_name == "contrast":
+                mode = "contrast"
             else:
-                aggregated_scores[metric_name] = (
-                    np.nanmean(raw_scores) if isinstance(raw_scores, list) else raw_scores
-                )
+                mode = "default"
+            
+            metrics = {name: self.metrics_config[name] for name in metric_names}
+            method_explanation = { 'Backtrace': backtrace_quantus }
 
-        return aggregated_scores
+            # Compute scores for each metric
+            aggregated_scores = {}
+            for metric_name, metric in metrics.items():
+                raw_scores = metric(
+                    model=self.model,
+                    x_batch=x_batch,
+                    y_batch=y_batch,
+                    device=self.device,
+                    explain_func=backtrace_quantus,
+                    explain_func_kwargs={'backtrace': self.backtrace_intitial,'mode':mode},
+                    channel_first=self.channel_first,
+                )
+                if metric_name == "Continuity":
+                    aggregated_scores[metric_name] = self._aggregate_continuity_scores(raw_scores)
+                elif metric_name == "MPRT" or metric_name == "SmoothMPRT":
+                    aggregated_scores[metric_name] = self._aggregate_MPRT_scores(raw_scores)
+                else:
+                    aggregated_scores[metric_name] = (
+                        np.nanmean(raw_scores) if isinstance(raw_scores, list) else raw_scores
+                    )
+            return aggregated_scores
+
+        else:
+            # Ensure the selected XAI method and metrics exist
+            if xai_method_name not in self.xai_methods_config:
+                raise ValueError(f"XAI method '{xai_method_name}' is not configured.")
+            if not all(metric in self.metrics_config for metric in metric_names):
+                raise ValueError("One or more metrics are not configured.")
+
+            # Prepare XAI method and metric instances
+            explain_func_kwargs = self.xai_methods_config[xai_method_name]
+            metrics = {name: self.metrics_config[name] for name in metric_names}
+
+            # Compute scores for each metric
+            aggregated_scores = {}
+            for metric_name, metric in metrics.items():
+                raw_scores = metric(
+                    model=self.model,
+                    x_batch=x_batch,
+                    y_batch=y_batch,
+                    device=self.device,
+                    explain_func=quantus.explain,
+                    explain_func_kwargs=explain_func_kwargs,
+                    channel_first=self.channel_first,
+                )
+                if metric_name == "Continuity":
+                    aggregated_scores[metric_name] = self._aggregate_continuity_scores(raw_scores)
+                elif metric_name == "MPRT" or metric_name == "SmoothMPRT":
+                    aggregated_scores[metric_name] = self._aggregate_MPRT_scores(raw_scores)
+                else:
+                    aggregated_scores[metric_name] = (
+                        np.nanmean(raw_scores) if isinstance(raw_scores, list) else raw_scores
+                    )
+
+            return aggregated_scores
 
     def _prepare_data(self, start_idx, end_idx):
         """
