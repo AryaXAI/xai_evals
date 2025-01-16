@@ -86,7 +86,7 @@ class ExplanationMetricsImage:
                 "SmoothGrad": {"xai_lib": "tf-explain", "method": "SmoothGrad"},
             }
         elif self.framework == "backtrace":
-            print("backtrace")
+            print("Backtrace Framework Explaination")
         else:
             raise ValueError(f"Unsupported framework: {framework}")
 
@@ -117,8 +117,16 @@ class ExplanationMetricsImage:
             
             if xai_method_name == "default":
                 mode = "default"
+                cmode = None
+            elif xai_method_name == "contrast-positive":
+                mode = "contrast"
+                cmode = "positive"
+            elif xai_method_name == "contrast-negative":
+                mode = "contrast"
+                cmode = "negative"
             elif xai_method_name == "contrast":
                 mode = "contrast"
+                cmode = "positive"  
             else:
                 mode = "default"
             
@@ -134,7 +142,7 @@ class ExplanationMetricsImage:
                     y_batch=y_batch,
                     device=self.device,
                     explain_func=backtrace_quantus,
-                    explain_func_kwargs={'backtrace': self.backtrace_intitial,'mode':mode},
+                    explain_func_kwargs={'backtrace': self.backtrace_intitial,'mode':mode, 'cmode':cmode},
                     channel_first=self.channel_first,
                 )
                 if metric_name == "Continuity":
@@ -519,7 +527,6 @@ class ExplanationMetricsTabular:
             for i in range(start_idx, end_idx):
                 instance_explanation = self.explainer.explain(self.X_test, instance_idx=i)
                 attributions_list.append(instance_explanation)
-        print("Computed Explainations")
         return attributions_list
 
     def _generate_noise(self, shape, epsilon=1e-2):
