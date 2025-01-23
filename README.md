@@ -16,6 +16,7 @@
   - [Tabular Metrics Calculation](#tabular-metrics-calculation)
   - [Torch Image Explainer](#torch-image-explainer)
   - [TFKeras Image Explainer](#tfkeras-image-explainer)
+  - [Tabular Metrics Calculation](#tabular-metrics-calculation)
   - [Image Metrics Calculation](#image-metrics-calculation)
 - [License](#license)
 
@@ -794,8 +795,7 @@ The **`ExplanationMetricsImage`** class in **`xai_evals`** provides a structured
    metrics_results_pytorch = metrics_image_pytorch.evaluate(
       start_idx=0, end_idx=32, 
       metric_names=["FaithfulnessCorrelation","MaxSensitivity","MPRT","SmoothMPRT","AvgSensitivity","FaithfulnessEstimate"], 
-      xai_method_name="IntegratedGradients", 
-      channel_first=True
+      xai_method_name="IntegratedGradients"
    )
    print("PyTorch Example Metrics:", metrics_results_pytorch)
    # --- Example 2: TensorFlow Metrics Calculation ---
@@ -829,8 +829,7 @@ The **`ExplanationMetricsImage`** class in **`xai_evals`** provides a structured
    metrics_single_image = metrics_image_single.evaluate(
       start_idx=0, end_idx=1, 
       metric_names=["FaithfulnessCorrelation","MaxSensitivity","MPRT","SmoothMPRT","AvgSensitivity","FaithfulnessEstimate"],
-      xai_method_name="IntegratedGradients",
-      channel_first=True
+      xai_method_name="IntegratedGradients"
    )
    print("Single Image Example Metrics:", metrics_single_image)
    # --- Example 4: TensorFlow Model with Single Image ---
@@ -848,8 +847,7 @@ The **`ExplanationMetricsImage`** class in **`xai_evals`** provides a structured
    metrics_single_image_tf = metrics_image_single_tf.evaluate(
       start_idx=0, end_idx=1, 
       metric_names=["FaithfulnessCorrelation","MaxSensitivity","MPRT","SmoothMPRT","AvgSensitivity","FaithfulnessEstimate"],
-      xai_method_name="GradCAM",
-      channel_first=True
+      xai_method_name="GradCAM"
    )
    print("TensorFlow Single Image Example Metrics:", metrics_single_image_tf)
 
@@ -904,7 +902,6 @@ Reference Values for Available Metrics:
 | `end_idx`             | The ending index of the batch for evaluation.                                                             | Integer (e.g., 100, or `None` for the entire batch)                                                  |
 | `metric_names`        | The list of metric names to evaluate.                                                                     | List of strings representing the metrics to compute (e.g., `["FaithfulnessCorrelation", "MaxSensitivity", "MPRT", "SmoothMPRT", "AvgSensitivity", "FaithfulnessEstimate"]`)        |
 | `xai_method_name`     | The name of the XAI method used for explanations (e.g., 'IntegratedGradients', 'GradCAM', etc.).           | String (e.g., for Torch `{grad_cam, integrated_gradients, saliency, deep_lift, gradient_shap, guided_backprop, occlusion, layer_gradcam, feature_ablation}` ; for Tensorflow `{VanillaGradients, GradCAM,GradientsInput,IntegratedGradients,OcclusionSensitivity,SmoothGrad` & for Backtrace `{default,contrast-positive,contrast-negative}`)                                                      |
-| `channel_first`       | A flag to indicate if the input data is in channel-first format (PyTorch) or channel-last format (TensorFlow). | Boolean (default: False)                                                                              |
 
 ---
 
