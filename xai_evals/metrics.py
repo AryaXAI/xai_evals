@@ -90,7 +90,7 @@ class ExplanationMetricsImage:
         else:
             raise ValueError(f"Unsupported framework: {framework}")
 
-    def evaluate(self, start_idx, end_idx, metric_names, xai_method_name,channel_first=False):
+    def evaluate(self, start_idx, end_idx, metric_names, xai_method_name,channel_first=True):
         """
         Evaluates a list of Quantus metrics on a batch of samples.
 
