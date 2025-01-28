@@ -3,7 +3,7 @@
 **`xai_evals`** is a Python package designed to generate and benchmark various explainability methods for machine learning and deep learning models. It offers tools for creating and evaluating explanations of popular machine learning models, supporting widely-used explanation methods. The package aims to streamline the interpretability of machine learning models, allowing practitioners to gain insights into how their models make predictions. Additionally, it includes several metrics for assessing the quality of these explanations.
 
 
-![Data Type (1)](https://github.com/user-attachments/assets/d559f078-5521-4988-84bd-c58d9c14b5ee)
+![Data Type (2)](https://github.com/user-attachments/assets/134a0b43-0cb8-4ed2-b815-c49e8b0c6c7b)
 
 ---
 
