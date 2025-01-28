@@ -16,6 +16,7 @@
   - [Tabular Metrics Calculation](#tabular-metrics-calculation)
   - [Torch Image Explainer](#torch-image-explainer)
   - [TFKeras Image Explainer](#tfkeras-image-explainer)
+  - [DlBacktrace Image Explainer](#dlbacktrace-image-explainer)
   - [Tabular Metrics Calculation](#tabular-metrics-calculation)
   - [Image Metrics Calculation](#image-metrics-calculation)
 - [License](#license)
@@ -160,7 +161,7 @@ For **LIMEExplainer and SHAPExplainer Class** we have several attributes :
 
 ### Torch Tabular Explainer
 
-The `TorchExplainer` class allows you to generate explanations for Pytorch Deep Learning Model . Explaination Method available include 'integrated_gradients', 'deep_lift', 'gradient_shap','saliency', 'input_x_gradient', 'guided_backprop','shap_kernel', 'shap_deep' and 'lime'.
+The `TorchTabularExplainer` class allows you to generate explanations for Pytorch Deep Learning Model . Explaination Method available include 'integrated_gradients', 'deep_lift', 'gradient_shap','saliency', 'input_x_gradient', 'guided_backprop','shap_kernel', 'shap_deep' and 'lime'.
 
 | Attribute    | Description | Values |
 |--------------|-------------|--------|
@@ -172,7 +173,7 @@ The `TorchExplainer` class allows you to generate explanations for Pytorch Deep 
 
 ### TFKeras Tabular Explainer
 
-The `TFExplainer` class allows you to generate explanations for Tensorflow/Keras Deep Learning Model . Explaination Method available include 'shap_kernel', 'shap_deep' and 'lime'.
+The `TFTabularExplainer` class allows you to generate explanations for Tensorflow/Keras Deep Learning Model . Explaination Method available include 'shap_kernel', 'shap_deep' and 'lime'.
 
 | Attribute    | Description | Values |
 |--------------|-------------|--------|
@@ -186,7 +187,7 @@ The `TFExplainer` class allows you to generate explanations for Tensorflow/Keras
 
 ### DlBacktrace Tabular Explainer
 
-The `BacktraceExplainer` , based on DLBacktrace, a method for analyzing neural networks by tracing the relevance of each component from output to input, to understand how each part contributes to the final prediction. It offers two modes: Default and Contrast, and is compatible with TensorFlow and PyTorch. (https://github.com/AryaXAI/DLBacktrace)
+The `DlBacktraceExplainer` , based on DLBacktrace, a method for analyzing neural networks by tracing the relevance of each component from output to input, to understand how each part contributes to the final prediction. It offers two modes: Default and Contrast, and is compatible with TensorFlow and PyTorch. (https://github.com/AryaXAI/DLBacktrace)
         
 | Attribute    | Description | Values |
 |--------------|-------------|--------|
@@ -363,19 +364,13 @@ plt.show()
 
 ---
 
-### Backtrace Image Explainer
+### DlBacktrace Image Explainer
 
-The `BacktraceImageExplainer` based on DLBacktrace, a method for analyzing neural networks by tracing the relevance of each component from output to input, to understand how each part contributes to the final prediction. It offers two modes: Default and Contrast, and is compatible with TensorFlow and PyTorch. (https://github.com/AryaXAI/DLBacktrace)
+The `DlBacktraceImageExplainer` based on DLBacktrace, a method for analyzing neural networks by tracing the relevance of each component from output to input, to understand how each part contributes to the final prediction. It offers two modes: Default and Contrast, and is compatible with TensorFlow and PyTorch. (https://github.com/AryaXAI/DLBacktrace)
 
-**Example: Tensorflow Model BacktraceImageExplainer**
+**Example: Tensorflow Model DlBacktraceImageExplainer**
 
 ```python
-import tensorflow as tf
-from tensorflow.keras import layers, models
-from tensorflow.keras.datasets import cifar10
-import numpy as np
-import matplotlib.pyplot as plt
-
 # Load CIFAR-10 data
 (x_train, y_train), (x_test, y_test) = cifar10.load_data()
 
@@ -423,18 +418,9 @@ plt.title("Feature Relevance for CIFAR-10 Image")
 plt.show()
 ```
 
-**Example: Torch Model BacktraceImageExplainer**
+**Example: Torch Model DlBacktraceImageExplainer**
 
 ```python
-import torch
-import torch.nn as nn
-import torch.optim as optim
-import torchvision
-import torchvision.transforms as transforms
-from torch.utils.data import DataLoader
-import numpy as np
-import matplotlib.pyplot as plt
-
 # Define a simple CNN model for CIFAR-10 without using `view()`
 class SimpleCNN(nn.Module):
     def __init__(self, num_classes=10):
@@ -492,7 +478,7 @@ for epoch in range(1):  # Just a couple of epochs for testing
 print("Finished Training")
 
 # Test the model using the BacktraceImageExplainer
-explainer = BacktraceImageExplainer(model=model)
+explainer = DlBacktraceImageExplainer(model=model)
 
 
 # Get the explanation for the first image
@@ -505,7 +491,7 @@ plt.title("Feature Relevance for CIFAR-10 Image")
 plt.show()
 ```
 
-#### **BacktraceImageExplainer**: `explain` Function Attributes
+#### **DlBacktraceImageExplainer**: `explain` Function Attributes
 
 | **Attribute** | **Description** | **Values** |
 |---------------|-----------------|-----------|
@@ -982,9 +968,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 In the future, we will continue to improve this library by:
 
-- Adding support for more explanation techniques.
-- Enhancing the metrics calculation with more advanced techniques.
-- Providing better visualization for SHAP and LIME explanations.
-- Improving the documentation and usability of the library.
+
 
 --- 
