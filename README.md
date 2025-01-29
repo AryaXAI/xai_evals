@@ -190,7 +190,7 @@ The `TFTabularExplainer` class allows you to generate explanations for Tensorflo
 
 ### DlBacktrace Tabular Explainer
 
-The `DlBacktraceExplainer` , based on DLBacktrace, a method for analyzing neural networks by tracing the relevance of each component from output to input, to understand how each part contributes to the final prediction. It offers two modes: Default and Contrast, and is compatible with TensorFlow and PyTorch. (https://github.com/AryaXAI/DLBacktrace)
+The `DlBacktraceTabularExplainer` , based on DLBacktrace, a method for analyzing neural networks by tracing the relevance of each component from output to input, to understand how each part contributes to the final prediction. It offers two modes: Default and Contrast, and is compatible with TensorFlow and PyTorch. (https://github.com/AryaXAI/DLBacktrace)
         
 | Attribute    | Description | Values |
 |--------------|-------------|--------|
