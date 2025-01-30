@@ -1,29 +1,33 @@
 # setup.py
 from setuptools import setup, find_packages
 
+with open("README.md", "r", encoding="utf-8") as f:
+    long_description = f.read()
+
+with open("requirements.txt", "r", encoding="utf-8") as pr:
+    install_requires = pr.readlines()
+
 setup(
     name="xai_evals",
-    version="0.1",
-    packages=find_packages(),
-    install_requires=[
-        'dl_backtrace',
-        'shap==0.46.0',
-        'lime==0.2.0.1',
-        'xgboost==2.1.3',
-        'scikit-learn==1.3.2',
-        'torch',
-        'pandas==2.1.4',
-        'numpy==1.26.4',
-        'catboost==1.2.7',
-        'lightgbm==4.5.0',
-        'tensorflow==2.14.0',
-        'captum==0.7.0',
-        'tf-explain',
-        'quantus'
-
-    ],
+    use_scm_version=True,
+    setup_requires=["setuptools_scm"],
     description="A package for model explainability and explainability comparision for tabular data",
-    author="Pratinav Seth",
-    author_email="pratinav.seth@arya.ai",
+    long_description=long_description,
+    long_description_content_type="text/markdown",
+    keywords="aryaxai deep learning backtrace, ML observability",
+    license="MIT",
     url="https://github.com/AryaXAI/xai_evals",
+    classifiers=[
+        "Intended Audience :: Developers",
+        "Intended Audience :: Science/Research",
+        "Programming Language :: Python :: 3",
+        "License :: OSI Approved :: MIT License",
+        "Operating System :: OS Independent",
+    ],
+    packages=find_packages(where="."),
+    python_requires=">=3.0",
+    install_requires=install_requires,
+    package_data={
+        "": ["*.md", "*.txt"],
+    },
 )
