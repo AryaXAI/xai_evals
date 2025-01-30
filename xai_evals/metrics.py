@@ -2,13 +2,17 @@ import pandas as pd
 import numpy as np
 import torch
 import tensorflow as tf
-from xai_evals.explainer import LIMEExplainer, SHAPExplainer, BacktraceExplainer, TorchExplainer, TFExplainer
+from xai_evals.explainer import LIMEExplainer, SHAPExplainer, DlBacktraceTabularExplainer, TorchTabularExplainer, TFTabularExplainer
 from sklearn.base import is_regressor, is_classifier
 import tensorflow as tf
 from tf_explain.core import IntegratedGradients, VanillaGradients, GradCAM, SmoothGrad, OcclusionSensitivity
 import numpy as np
 import quantus
 from tensorflow.keras.utils import to_categorical
+from dl_backtrace.tf_backtrace import Backtrace as TFBacktrace
+from dl_backtrace.pytorch_backtrace import Backtrace as TorchBacktrace
+from xai_evals.utils import backtrace_quantus
+
 
 class ExplanationMetricsImage:
     """
@@ -81,10 +85,12 @@ class ExplanationMetricsImage:
                 "OcclusionSensitivity": {"xai_lib": "tf-explain", "method": "OcclusionSensitivity"},
                 "SmoothGrad": {"xai_lib": "tf-explain", "method": "SmoothGrad"},
             }
+        elif self.framework == "backtrace":
+            print("Backtrace Framework Explaination")
         else:
             raise ValueError(f"Unsupported framework: {framework}")
 
-    def evaluate(self, start_idx, end_idx, metric_names, xai_method_name,channel_first=False):
+    def evaluate(self, start_idx, end_idx, metric_names, xai_method_name,channel_first=True,softmax=False):
         """
         Evaluates a list of Quantus metrics on a batch of samples.
 
@@ -98,41 +104,93 @@ class ExplanationMetricsImage:
             dict: Aggregated scores for each metric.
         """
         # Prepare batch data
+        self.softmax = softmax
         self.channel_first = channel_first
         x_batch, y_batch = self._prepare_data(start_idx, end_idx)
 
-        # Ensure the selected XAI method and metrics exist
-        if xai_method_name not in self.xai_methods_config:
-            raise ValueError(f"XAI method '{xai_method_name}' is not configured.")
-        if not all(metric in self.metrics_config for metric in metric_names):
-            raise ValueError("One or more metrics are not configured.")
+        if self.framework == "backtrace":
+            if isinstance(self.model, tf.keras.Model):  # TensorFlow model
+                self.backtrace_intitial = TFBacktrace(model=self.model)
+            elif isinstance(self.model, torch.nn.Module):  # PyTorch model
+                self.backtrace_intitial = TorchBacktrace(model=self.model)
 
-        # Prepare XAI method and metric instances
-        explain_func_kwargs = self.xai_methods_config[xai_method_name]
-        metrics = {name: self.metrics_config[name] for name in metric_names}
-
-        # Compute scores for each metric
-        aggregated_scores = {}
-        for metric_name, metric in metrics.items():
-            raw_scores = metric(
-                model=self.model,
-                x_batch=x_batch,
-                y_batch=y_batch,
-                device=self.device,
-                explain_func=quantus.explain,
-                explain_func_kwargs=explain_func_kwargs,
-                channel_first=self.channel_first,
-            )
-            if metric_name == "Continuity":
-                aggregated_scores[metric_name] = self._aggregate_continuity_scores(raw_scores)
-            elif metric_name == "MPRT" or metric_name == "SmoothMPRT":
-                aggregated_scores[metric_name] = self._aggregate_MPRT_scores(raw_scores)
+        # Wrapper to integrate Backtrace with Quantus
+            
+            if xai_method_name == "default":
+                mode = "default"
+                cmode = None
+            elif xai_method_name == "contrast-positive":
+                mode = "contrast"
+                cmode = "Positive"
+            elif xai_method_name == "contrast-negative":
+                mode = "contrast"
+                cmode = "Negative"
+            elif xai_method_name == "contrast":
+                mode = "contrast"
+                cmode = "Positive"  
             else:
-                aggregated_scores[metric_name] = (
-                    np.nanmean(raw_scores) if isinstance(raw_scores, list) else raw_scores
-                )
+                mode = "default"
+            
+            metrics = {name: self.metrics_config[name] for name in metric_names}
+            method_explanation = { 'Backtrace': backtrace_quantus }
 
-        return aggregated_scores
+            # Compute scores for each metric
+            aggregated_scores = {}
+            for metric_name, metric in metrics.items():
+                raw_scores = metric(
+                    model=self.model,
+                    x_batch=x_batch,
+                    y_batch=y_batch,
+                    device=self.device,
+                    explain_func=backtrace_quantus,
+                    explain_func_kwargs={'backtrace': self.backtrace_intitial,'mode':mode, 'cmode':cmode},
+                    channel_first=self.channel_first,
+                    softmax=self.softmax
+                )
+                if metric_name == "Continuity":
+                    aggregated_scores[metric_name] = self._aggregate_continuity_scores(raw_scores)
+                elif metric_name == "MPRT" or metric_name == "SmoothMPRT":
+                    aggregated_scores[metric_name] = self._aggregate_MPRT_scores(raw_scores)
+                else:
+                    aggregated_scores[metric_name] = (
+                        np.nanmean(raw_scores) if isinstance(raw_scores, list) else raw_scores
+                    )
+            return aggregated_scores
+
+        else:
+            # Ensure the selected XAI method and metrics exist
+            if xai_method_name not in self.xai_methods_config:
+                raise ValueError(f"XAI method '{xai_method_name}' is not configured.")
+            if not all(metric in self.metrics_config for metric in metric_names):
+                raise ValueError("One or more metrics are not configured.")
+
+            # Prepare XAI method and metric instances
+            explain_func_kwargs = self.xai_methods_config[xai_method_name]
+            metrics = {name: self.metrics_config[name] for name in metric_names}
+
+            # Compute scores for each metric
+            aggregated_scores = {}
+            for metric_name, metric in metrics.items():
+                raw_scores = metric(
+                    model=self.model,
+                    x_batch=x_batch,
+                    y_batch=y_batch,
+                    device=self.device,
+                    explain_func=quantus.explain,
+                    explain_func_kwargs=explain_func_kwargs,
+                    channel_first=self.channel_first,
+                    softmax=self.softmax
+                )
+                if metric_name == "Continuity":
+                    aggregated_scores[metric_name] = self._aggregate_continuity_scores(raw_scores)
+                elif metric_name == "MPRT" or metric_name == "SmoothMPRT":
+                    aggregated_scores[metric_name] = self._aggregate_MPRT_scores(raw_scores)
+                else:
+                    aggregated_scores[metric_name] = (
+                        np.nanmean(raw_scores) if isinstance(raw_scores, list) else raw_scores
+                    )
+
+            return aggregated_scores
 
     def _prepare_data(self, start_idx, end_idx):
         """
@@ -221,8 +279,6 @@ class ExplanationMetricsImage:
 
         return x_batch, y_batch
 
-
-
     def _aggregate_continuity_scores(self, scores):
         """
         Aggregates the dictionary-based Continuity scores.
@@ -277,19 +333,24 @@ class ExplanationMetricsTabular:
         """
         self.model = model
         self.explainer_name = explainer_name.lower()
+        if self.explainer_name=="backtrace":
+            self.method = method.lower()
+        else:
+            self.method = method
         self.X_train = X_train
-
         if isinstance(X_test, pd.DataFrame):
             self.X_test = X_test.to_numpy()
         elif isinstance(X_test, np.ndarray):
             self.X_test = X_test
+        elif isinstance(X_test, torch.Tensor):
+            self.X_test = X_test.numpy()
         else:
             raise ValueError("X_test must be a DataFrame or ndarray.")
         
         self.y_test = y_test
         self.features = features
         self.task = task.lower()
-        self.method = method
+        
         self.scaler = scaler
         self.thresholding = thresholding
         self.subset_samples = subset_samples
@@ -333,17 +394,17 @@ class ExplanationMetricsTabular:
             # Ensure PyTorch model
             if not isinstance(self.model, torch.nn.Module):
                 raise ValueError("For 'torch' explainer, model must be a PyTorch model.")
-            return TorchExplainer(model=self.model, task=self.task, method=self.method, feature_names=self.features, X_train=self.X_train)
+            return TorchTabularExplainer(model=self.model, task=self.task, method=self.method, feature_names=self.features, X_train=self.X_train)
         elif self.explainer_name == 'tensorflow':
             # Ensure TensorFlow model
             if not isinstance(self.model, tf.keras.Model):
                 raise ValueError("For 'tensorflow' explainer, model must be a TensorFlow/Keras model.")
-            return TFExplainer(model=self.model, task=self.task, method=self.method, feature_names=self.features, X_train=self.X_train)
+            return TFTabularExplainer(model=self.model, task=self.task, method=self.method, feature_names=self.features, X_train=self.X_train)
         elif self.explainer_name == 'backtrace':
             # Backtrace works with TF/PyTorch
             if not (isinstance(self.model, tf.keras.Model) or isinstance(self.model, torch.nn.Module)):
                 raise ValueError("For 'backtrace' explainer, model must be a TF/Keras or PyTorch model.")
-            return BacktraceExplainer(model=self.model, task=self.task, method=self.method, scaler=self.scaler,
+            return DlBacktraceTabularExplainer(model=self.model, task=self.task, method=self.method, scaler=self.scaler,
                                       thresholding=self.thresholding, feature_names=self.features)
         else:
             raise ValueError("Unsupported explainer name. Choose from 'shap', 'lime', 'torch', 'tensorflow', 'backtrace'.")
@@ -472,7 +533,6 @@ class ExplanationMetricsTabular:
             for i in range(start_idx, end_idx):
                 instance_explanation = self.explainer.explain(self.X_test, instance_idx=i)
                 attributions_list.append(instance_explanation)
-        print("Computed Explainations")
         return attributions_list
 
     def _generate_noise(self, shape, epsilon=1e-2):
@@ -499,7 +559,7 @@ class ExplanationMetricsTabular:
         for i in range(self.start_idx, self.end_idx):
             x = self.X_test[i:i+1]
             noise = self._generate_noise(x.shape, epsilon=epsilon)
-            perturbed_x = x + noise
+            perturbed_x = (x + noise).astype(x.dtype)
             old_attr = attributions_list[i - self.start_idx]['Attribution'].values
 
             new_explanation = self.explainer.explain(perturbed_x, instance_idx=0)

@@ -30,7 +30,7 @@ from captum.attr import (
 )
 from captum.attr import LayerAttribution
 
-class BacktraceImageExplainer:
+class DlBacktraceImageExplainer:
     def __init__(self, model,):
         self.model = model
         # Automatically detect whether the model is TensorFlow or PyTorch
@@ -51,7 +51,6 @@ class BacktraceImageExplainer:
             if isinstance(module, torch.nn.Conv2d):
                 last_conv = module
         return last_conv
-    
     
     def explain(self, test_data, instance_idx=0,mode='default',scaler=1,thresholding=0,task='binary-classification',contrast_mode='Positive'):
         relevance = None
@@ -252,7 +251,6 @@ class TorchImageExplainer:
         attr_2d = attributions.mean(dim=1).squeeze(0).detach().cpu().numpy()
         return attr_2d
 
-# TFImageExplainer Implementation
 class TFImageExplainer:
     """
     Wrapper for tf-explain explainers for TensorFlow models.
@@ -439,7 +437,6 @@ class SHAPExplainer:
         attribution_df = attribution_df.sort_values(by="Attribution", key=abs, ascending=False)
         return attribution_df
 
-
 class LIMEExplainer:
     def __init__(self, model, features, task="binary-classification", X_train=None,model_classes=None):
         """
@@ -530,10 +527,7 @@ class LIMEExplainer:
         attribution_df['Attribution'] = attribution_df['Attribution'].abs()
         return attribution_df
 
-
-
-
-class TFExplainer:
+class TFTabularExplainer:
     def __init__(self, model, method, feature_names, X_train=None, task="binary-classification"):
         """
         Initialize a TF explainer for Integrated Gradients, SHAP, and LIME.
@@ -682,8 +676,7 @@ class TFExplainer:
         attribution_df = attribution_df.sort_values(by="Attribution", key=np.abs, ascending=False)
         return attribution_df
 
-
-class TorchExplainer:
+class TorchTabularExplainer:
     def __init__(self, model, method, feature_names, X_train=None, task="binary-classification"):
         """
         Initialize the unified explainer for Captum, LIME, and SHAP.
@@ -791,16 +784,17 @@ class TorchExplainer:
                 else:
                     inputs = torch.tensor(inputs, dtype=torch.float32)
                 baseline = torch.zeros_like(inputs)  # Default baseline
-
             attributions = self.explainer.attribute(inputs, baselines=baseline, target=target)
         elif self.method in ["deep_lift", "saliency", "input_x_gradient", "guided_backprop"]:
             if instance_idx is not None:
                 inputs = inputs[instance_idx:instance_idx + 1]
+            if not isinstance(inputs, torch.Tensor):
+                inputs = torch.tensor(inputs)
             attributions = self.explainer.attribute(inputs, target=target)
         elif self.method == "shap_kernel":
-            if instance_idx is None :
-                instance_idx = 0
-            shap_values = self.explainer.shap_values(inputs_np[instance_idx:instance_idx + 1])
+            if instance_idx is not None:
+                inputs_np = inputs_np[instance_idx:instance_idx + 1]
+            shap_values = self.explainer.shap_values(inputs_np)
             attributions = shap_values[0]  # For binary classification, use first class
         elif self.method == "shap_deep":
             if instance_idx is not None:
@@ -822,7 +816,6 @@ class TorchExplainer:
         if instance_idx is None :
             instance_idx = 0
 
-        print(attributions.shape)
         results = pd.DataFrame({
             "Feature": self.feature_names,
             "Value": inputs_np[instance_idx],
@@ -862,7 +855,7 @@ class TorchExplainer:
         attribution_df = attribution_df.sort_values(by="Attribution", key=abs, ascending=False)
         return attribution_df
 
-class BacktraceExplainer:
+class DlBacktraceTabularExplainer:
     def __init__(self, model, feature_names, task="binary-classification", scaler=1, thresholding=0.5, method="default", X_train=None):
         """
         Initialize the BacktraceExplainer with model, framework detection, task type, and other evaluation parameters.
@@ -879,6 +872,21 @@ class BacktraceExplainer:
         self.scaler = scaler
         self.thresholding = thresholding
         self.feature_names = feature_names
+
+        if self.mode == "default":
+            self.mode = "default"
+            self.cmode = None
+        elif self.mode == "contrast-positive":
+            self.mode = "contrast"
+            self.cmode = "Positive"
+        elif self.mode == "contrast-negative":
+            self.mode = "contrast"
+            self.cmode = "Negative"
+        elif self.mode == "contrast":
+            self.mode = "contrast"
+            self.cmode = "Positive"  
+        else:
+            self.mode = "default"
 
         # Automatically detect whether the model is TensorFlow or PyTorch
         if isinstance(self.model, tf.keras.Model):  # TensorFlow model
@@ -900,6 +908,8 @@ class BacktraceExplainer:
             return test_data
         elif isinstance(test_data, pd.DataFrame):
             return test_data.values
+        elif isinstance(test_data, torch.Tensor):
+                return test_data.numpy()
         else:
             raise ValueError("Unsupported data format. Input must be a numpy array or pandas DataFrame.")
 
@@ -914,7 +924,8 @@ class BacktraceExplainer:
         instance = test_data[instance_idx:instance_idx+1]
 
         if self.framework == "pytorch":
-            instance = torch.tensor(instance, dtype=torch.float32)
+            if not isinstance(test_data, torch.Tensor):
+                instance = torch.tensor(instance)
 
         # Step 1: Get the layer outputs using the Backtrace model
         layer_outputs = self.backtrace.predict(instance)
@@ -927,9 +938,8 @@ class BacktraceExplainer:
             thresholding=self.thresholding,
             task=self.task
         )
-
         # Step 3: Format the relevance output as a DataFrame, focusing on the input layer's relevance
-        return self._format_relevance(instance, relevance[self.inp_layer])
+        return self._format_relevance(instance, relevance[self.inp_layer][self.cmode])
 
     def _format_relevance(self, instance, relevance):
         """

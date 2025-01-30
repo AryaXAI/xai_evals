@@ -2,6 +2,9 @@
 
 **`xai_evals`** is a Python package designed to generate and benchmark various explainability methods for machine learning and deep learning models. It offers tools for creating and evaluating explanations of popular machine learning models, supporting widely-used explanation methods. The package aims to streamline the interpretability of machine learning models, allowing practitioners to gain insights into how their models make predictions. Additionally, it includes several metrics for assessing the quality of these explanations.
 
+
+![Data Type (2)](https://github.com/user-attachments/assets/134a0b43-0cb8-4ed2-b815-c49e8b0c6c7b)
+
 ---
 
 ## Table of Contents
@@ -16,6 +19,8 @@
   - [Tabular Metrics Calculation](#tabular-metrics-calculation)
   - [Torch Image Explainer](#torch-image-explainer)
   - [TFKeras Image Explainer](#tfkeras-image-explainer)
+  - [DlBacktrace Image Explainer](#dlbacktrace-image-explainer)
+  - [Tabular Metrics Calculation](#tabular-metrics-calculation)
   - [Image Metrics Calculation](#image-metrics-calculation)
 - [License](#license)
 
@@ -159,7 +164,7 @@ For **LIMEExplainer and SHAPExplainer Class** we have several attributes :
 
 ### Torch Tabular Explainer
 
-The `TorchExplainer` class allows you to generate explanations for Pytorch Deep Learning Model . Explaination Method available include 'integrated_gradients', 'deep_lift', 'gradient_shap','saliency', 'input_x_gradient', 'guided_backprop','shap_kernel', 'shap_deep' and 'lime'.
+The `TorchTabularExplainer` class allows you to generate explanations for Pytorch Deep Learning Model . Explaination Method available include 'integrated_gradients', 'deep_lift', 'gradient_shap','saliency', 'input_x_gradient', 'guided_backprop','shap_kernel', 'shap_deep' and 'lime'.
 
 | Attribute    | Description | Values |
 |--------------|-------------|--------|
@@ -171,7 +176,7 @@ The `TorchExplainer` class allows you to generate explanations for Pytorch Deep 
 
 ### TFKeras Tabular Explainer
 
-The `TFExplainer` class allows you to generate explanations for Tensorflow/Keras Deep Learning Model . Explaination Method available include 'shap_kernel', 'shap_deep' and 'lime'.
+The `TFTabularExplainer` class allows you to generate explanations for Tensorflow/Keras Deep Learning Model . Explaination Method available include 'shap_kernel', 'shap_deep' and 'lime'.
 
 | Attribute    | Description | Values |
 |--------------|-------------|--------|
@@ -185,7 +190,7 @@ The `TFExplainer` class allows you to generate explanations for Tensorflow/Keras
 
 ### DlBacktrace Tabular Explainer
 
-The `BacktraceExplainer` , based on DLBacktrace, a method for analyzing neural networks by tracing the relevance of each component from output to input, to understand how each part contributes to the final prediction. It offers two modes: Default and Contrast, and is compatible with TensorFlow and PyTorch. (https://github.com/AryaXAI/DLBacktrace)
+The `DlBacktraceTabularExplainer` , based on DLBacktrace, a method for analyzing neural networks by tracing the relevance of each component from output to input, to understand how each part contributes to the final prediction. It offers two modes: Default and Contrast, and is compatible with TensorFlow and PyTorch. (https://github.com/AryaXAI/DLBacktrace)
         
 | Attribute    | Description | Values |
 |--------------|-------------|--------|
@@ -362,19 +367,13 @@ plt.show()
 
 ---
 
-### Backtrace Image Explainer
+### DlBacktrace Image Explainer
 
-The `BacktraceImageExplainer` based on DLBacktrace, a method for analyzing neural networks by tracing the relevance of each component from output to input, to understand how each part contributes to the final prediction. It offers two modes: Default and Contrast, and is compatible with TensorFlow and PyTorch. (https://github.com/AryaXAI/DLBacktrace)
+The `DlBacktraceImageExplainer` based on DLBacktrace, a method for analyzing neural networks by tracing the relevance of each component from output to input, to understand how each part contributes to the final prediction. It offers two modes: Default and Contrast, and is compatible with TensorFlow and PyTorch. (https://github.com/AryaXAI/DLBacktrace)
 
-**Example: Tensorflow Model BacktraceImageExplainer**
+**Example: Tensorflow Model DlBacktraceImageExplainer**
 
 ```python
-import tensorflow as tf
-from tensorflow.keras import layers, models
-from tensorflow.keras.datasets import cifar10
-import numpy as np
-import matplotlib.pyplot as plt
-
 # Load CIFAR-10 data
 (x_train, y_train), (x_test, y_test) = cifar10.load_data()
 
@@ -422,18 +421,9 @@ plt.title("Feature Relevance for CIFAR-10 Image")
 plt.show()
 ```
 
-**Example: Torch Model BacktraceImageExplainer**
+**Example: Torch Model DlBacktraceImageExplainer**
 
 ```python
-import torch
-import torch.nn as nn
-import torch.optim as optim
-import torchvision
-import torchvision.transforms as transforms
-from torch.utils.data import DataLoader
-import numpy as np
-import matplotlib.pyplot as plt
-
 # Define a simple CNN model for CIFAR-10 without using `view()`
 class SimpleCNN(nn.Module):
     def __init__(self, num_classes=10):
@@ -491,7 +481,7 @@ for epoch in range(1):  # Just a couple of epochs for testing
 print("Finished Training")
 
 # Test the model using the BacktraceImageExplainer
-explainer = BacktraceImageExplainer(model=model)
+explainer = DlBacktraceImageExplainer(model=model)
 
 
 # Get the explanation for the first image
@@ -504,7 +494,7 @@ plt.title("Feature Relevance for CIFAR-10 Image")
 plt.show()
 ```
 
-#### **BacktraceImageExplainer**: `explain` Function Attributes
+#### **DlBacktraceImageExplainer**: `explain` Function Attributes
 
 | **Attribute** | **Description** | **Values** |
 |---------------|-----------------|-----------|
@@ -520,22 +510,22 @@ plt.show()
 
 ### Tabular Metrics Calculation
 
-The **`xai_evals`** package provides a powerful class, **`ExplanationMetrics`**, to evaluate the quality of explanations generated by SHAP and LIME. This class allows you to calculate several metrics, helping you assess the robustness, reliability, and interpretability of your model explanations. [NOTE: Metrics only supports Sklearn ML Models]
+The **`xai_evals`** package provides a powerful class, **`ExplanationMetricsTabular`**, to evaluate the quality of explanations generated by SHAP and LIME. This class allows you to calculate several metrics, helping you assess the robustness, reliability, and interpretability of your model explanations. [NOTE: Metrics only supports Sklearn ML Models]
 
 #### ExplanationMetrics Class
 
 
-The **`ExplanationMetrics`** class in `xai_evals` provides a structured way to evaluate the quality and reliability of explanations generated by SHAP or LIME for machine learning models. By assessing multiple metrics, you can better understand how well these explanations align with your model's predictions and behavior.
+The **`ExplanationMetricsTabular`** class in `xai_evals` provides a structured way to evaluate the quality and reliability of explanations generated by SHAP or LIME for machine learning models. By assessing multiple metrics, you can better understand how well these explanations align with your model's predictions and behavior.
 
 ---
 
 #### Steps for Using ExplanationMetrics
 
 1. **Initialize ExplanationMetrics**  
-   Begin by creating an instance of the `ExplanationMetrics` class with the necessary inputs, including the model, explainer type, dataset, and the task type.
+   Begin by creating an instance of the `ExplanationMetricsTabular` class with the necessary inputs, including the model, explainer type, dataset, and the task type.
 
    ```python
-   from xai_evals.metrics import ExplanationMetrics
+   from xai_evals.metrics import ExplanationMetricsTabular
    from xai_evals.explainer import SHAPExplainer
    from sklearn.ensemble import RandomForestClassifier
    import pandas as pd
@@ -549,7 +539,7 @@ The **`ExplanationMetrics`** class in `xai_evals` provides a structured way to e
    model.fit(X, y)
 
    # Initialize ExplanationMetrics with SHAP explainer
-   explanation_metrics = ExplanationMetrics(
+   explanation_metrics = ExplanationMetricsTabular(
        model=model,
        explainer_name="shap",
        X_train=X,
@@ -560,7 +550,7 @@ The **`ExplanationMetrics`** class in `xai_evals` provides a structured way to e
    )
    ```
 
-For **ExplanationMetrics Class** we have several attributes :
+For **ExplanationMetricsTabular Class** we have several attributes :
 
 
 | Attribute    | Description | Values |
@@ -794,8 +784,7 @@ The **`ExplanationMetricsImage`** class in **`xai_evals`** provides a structured
    metrics_results_pytorch = metrics_image_pytorch.evaluate(
       start_idx=0, end_idx=32, 
       metric_names=["FaithfulnessCorrelation","MaxSensitivity","MPRT","SmoothMPRT","AvgSensitivity","FaithfulnessEstimate"], 
-      xai_method_name="IntegratedGradients", 
-      channel_first=True
+      xai_method_name="IntegratedGradients"
    )
    print("PyTorch Example Metrics:", metrics_results_pytorch)
    # --- Example 2: TensorFlow Metrics Calculation ---
@@ -829,8 +818,7 @@ The **`ExplanationMetricsImage`** class in **`xai_evals`** provides a structured
    metrics_single_image = metrics_image_single.evaluate(
       start_idx=0, end_idx=1, 
       metric_names=["FaithfulnessCorrelation","MaxSensitivity","MPRT","SmoothMPRT","AvgSensitivity","FaithfulnessEstimate"],
-      xai_method_name="IntegratedGradients",
-      channel_first=True
+      xai_method_name="IntegratedGradients"
    )
    print("Single Image Example Metrics:", metrics_single_image)
    # --- Example 4: TensorFlow Model with Single Image ---
@@ -848,8 +836,7 @@ The **`ExplanationMetricsImage`** class in **`xai_evals`** provides a structured
    metrics_single_image_tf = metrics_image_single_tf.evaluate(
       start_idx=0, end_idx=1, 
       metric_names=["FaithfulnessCorrelation","MaxSensitivity","MPRT","SmoothMPRT","AvgSensitivity","FaithfulnessEstimate"],
-      xai_method_name="GradCAM",
-      channel_first=True
+      xai_method_name="GradCAM"
    )
    print("TensorFlow Single Image Example Metrics:", metrics_single_image_tf)
 
@@ -890,7 +877,7 @@ Reference Values for Available Metrics:
 |----------------------|----------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------|
 | `model`              | The trained model for which explanations will be evaluated.                                                | [PyTorch model, TensorFlow model]                                                                    |
 | `data_loader`        | The data loader or dataset containing the test data.                                                      | [PyTorch Dataset,PyTorch DataLoader,TensorFlow Dataset, tuple of (image-np.array/torch.Tensor/tensorflow.Tensor.Tensor,label-np.array/torch.Tensor/tensorflow.Tensor)]                                                |
-| `framework`          | The framework used for the model (either 'torch' or 'tensorflow').                                         | {'torch', 'tensorflow'}                                                                               |
+| `framework`          | The framework used for the model (either 'torch' or 'tensorflow' or 'backtrace').                                         | {'torch', 'tensorflow','backtrace'}                                                                               |
 | `device`             | The device (CPU/GPU) used for performing computations (for PyTorch models).                               | [torch.device (Optional)]                                                                             |
 | `num_classes`        | The number of classes for classification tasks.                                                           | Integer (default: 10)                                                                                 |
 
@@ -903,8 +890,7 @@ Reference Values for Available Metrics:
 | `start_idx`           | The starting index of the batch for evaluation.                                                           | Integer (e.g., 0)                                                                                   |
 | `end_idx`             | The ending index of the batch for evaluation.                                                             | Integer (e.g., 100, or `None` for the entire batch)                                                  |
 | `metric_names`        | The list of metric names to evaluate.                                                                     | List of strings representing the metrics to compute (e.g., `["FaithfulnessCorrelation", "MaxSensitivity", "MPRT", "SmoothMPRT", "AvgSensitivity", "FaithfulnessEstimate"]`)        |
-| `xai_method_name`     | The name of the XAI method used for explanations (e.g., 'IntegratedGradients', 'GradCAM', etc.).           | String (e.g., for Torch `{grad_cam, integrated_gradients, saliency, deep_lift, gradient_shap, guided_backprop, occlusion, layer_gradcam, feature_ablation}` and for Tensorflow `{VanillaGradients, GradCAM,GradientsInput,IntegratedGradients,OcclusionSensitivity,SmoothGrad}`)                                                      |
-| `channel_first`       | A flag to indicate if the input data is in channel-first format (PyTorch) or channel-last format (TensorFlow). | Boolean (default: False)                                                                              |
+| `xai_method_name`     | The name of the XAI method used for explanations (e.g., 'IntegratedGradients', 'GradCAM', etc.).           | String (e.g., for Torch `{grad_cam, integrated_gradients, saliency, deep_lift, gradient_shap, guided_backprop, occlusion, layer_gradcam, feature_ablation}` ; for Tensorflow `{VanillaGradients, GradCAM,GradientsInput,IntegratedGradients,OcclusionSensitivity,SmoothGrad` & for Backtrace `{default,contrast-positive,contrast-negative}`)                                                      |
 
 ---
 
@@ -985,9 +971,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 In the future, we will continue to improve this library by:
 
-- Adding support for more explanation techniques.
-- Enhancing the metrics calculation with more advanced techniques.
-- Providing better visualization for SHAP and LIME explanations.
-- Improving the documentation and usability of the library.
+
 
 --- 
