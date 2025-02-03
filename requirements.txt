@@ -12,3 +12,4 @@ captum==0.7.0
 quantus==0.5.3
 tf-explain
 torch
+tqdm

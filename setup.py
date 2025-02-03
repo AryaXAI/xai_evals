@@ -19,7 +19,8 @@ setup(
         'tensorflow==2.14.0',
         'quantus==0.5.3',
         'captum==0.7.0',
-        'tf-explain'
+        'tf-explain',
+        'tqdm'
         
 
     ],
