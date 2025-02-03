@@ -31,39 +31,8 @@
 To install **`xai_evals`**, you can use `pip`. First, clone the repository or download the files to your local environment. Then, install the necessary dependencies:
 
 ```bash
-git clone https://github.com/AryaXAI/xai_evals.git
-cd xai_evals
-pip install .
+pip install xai_evals
 ```
-
-Alternatively, if you don't want to clone the repo manually, you can install the package directly from pip (after we publish it [TODO]).
-
-### Dependencies
-
-- **`dl_backtrace`**: A library for analyzing neural networks by tracing the relevance of each component from output to input.
-- **`shap==0.46.0`**: A library for computing SHAP values (SHapley Additive exPlanations) to interpret machine learning models.
-- **`lime==0.2.0.1`**: A library for generating LIME (Local Interpretable Model-Agnostic Explanations) to explain individual predictions.
-- **`xgboost==2.1.3`**: A gradient boosting library designed for efficient and scalable machine learning tasks.
-- **`scikit-learn==1.3.2`**: A versatile machine learning library for building and evaluating models, and performing preprocessing.
-- **`torch`**: A deep learning framework (PyTorch) for creating and training neural networks.
-- **`pandas==2.1.4`**: A powerful library for data manipulation and analysis, particularly useful for handling tabular data.
-- **`numpy==1.26.4`**: A fundamental library for numerical computations, providing support for large, multi-dimensional arrays and matrices.
-- **`catboost==1.2.7`**: A gradient boosting library that is particularly effective for categorical feature handling.
-- **`lightgbm==4.5.0`**: A fast, distributed, high-performance gradient boosting framework for machine learning.
-- **`tensorflow==2.14.0`**: An open-source library for machine learning and deep learning tasks, developed by Google.
-- **`captum==0.7.0`**: A model interpretability library for PyTorch, offering various attribution methods.
-- **`tf-explain`**: A library for interpreting deep learning models, particularly for TensorFlow/Keras-based models.
-- **`quantus`**: A library for evaluating model explanations using various quantitative metrics.
-
-This list ensures all required dependencies, with specific versions, are included for optimal compatibility.
-
-To install all dependencies, run:
-
-```bash
-pip install -r requirements.txt
-```
-
----
 
 ## Usage
 

@@ -208,7 +208,7 @@ class ExplanationMetricsImage:
             elif metric_name == "MPRT" or metric_name == "SmoothMPRT":
                 batch_results[metric_name] = self._aggregate_MPRT_scores(raw_scores)
             else:
-                batch_results[metric_name] = (np.nanmean(raw_scores) if isinstance(raw_scores, list) else raw_scores)
+                batch_results[metric_name] = (np.nanmean([v for v in raw_scores if not np.isnan(v) and not np.isinf(v)]) if isinstance(raw_scores, list) else raw_scores)
 
         return batch_results
 
@@ -225,11 +225,14 @@ class ExplanationMetricsImage:
         all_values = []
         for key, value in scores.items():
             if isinstance(value, list):
-                all_values.extend(value)
+                all_values.extend([v for v in value if not np.isnan(v) and not np.isinf(v)])
             elif isinstance(value, dict):  # Nested dictionary case
                 for sub_key, sub_value in value.items():
                     if isinstance(sub_value, list):
-                        all_values.extend(sub_value)
+                        all_values.extend([v for v in sub_value if not np.isnan(v) and not np.isinf(v)])
+                    else:
+                        all_values.extend([v for v in sub_value if not np.isnan(v) and not np.isinf(v)])
+
         return np.nanmean(all_values)
 
     def _aggregate_MPRT_scores(self, scores):
@@ -241,6 +244,7 @@ class ExplanationMetricsImage:
     def _aggregate_cached_results(self, cache_files):
         """Aggregates metric results from cached batch files and deletes them."""
         aggregated_scores = {}
+        nan_inf_value_count = 0
 
         for cache_file in cache_files:
             with open(cache_file, "rb") as f:
@@ -250,18 +254,26 @@ class ExplanationMetricsImage:
                 if isinstance(score, dict):
                     for sub_key, sub_value in score.items():
                         name_key = metric_name + "_" + sub_key
-                        if name_key not in aggregated_scores:
-                            aggregated_scores[name_key] = 0.0
+                        if np.isfinite(sub_value):
+                            if name_key not in aggregated_scores:
+                                aggregated_scores[name_key] = 0.0
+                            else:
+                                aggregated_scores[name_key] += sub_value
                         else:
-                            aggregated_scores[name_key] += sub_value
+                            nan_inf_value_count+=1
                 else:
-                    if metric_name not in aggregated_scores:
-                        aggregated_scores[metric_name] = 0.0
-                    aggregated_scores[metric_name] += score
+                    if np.isfinite(score):
+                        if metric_name not in aggregated_scores:
+                            aggregated_scores[metric_name] = 0.0
+                        aggregated_scores[metric_name] += score
+                    else:
+                        nan_inf_value_count +=1
 
-        num_batches = len(cache_files)
+        num_batches = len(cache_files)-nan_inf_value_count
         for metric_name in aggregated_scores:
             aggregated_scores[metric_name] /= num_batches
+
+        aggregated_scores["num_batches"] = num_batches
 
         # Delete cache files
         for cache_file in cache_files:
@@ -295,7 +307,7 @@ class ExplanationMetricsImage:
                     elif metric_name == "MPRT" or metric_name == "SmoothMPRT":
                         batch_results[metric_name] = self._aggregate_MPRT_scores(raw_scores)
                     else:
-                        batch_results[metric_name] = (np.nanmean(raw_scores) if isinstance(raw_scores, list) else raw_scores)
+                        batch_results[metric_name] = (np.nanmean([v for v in raw_scores if not np.isnan(v) and not np.isinf(v)]) if isinstance(raw_scores, list) else raw_scores)
         else:
             for metric_name, metric in metrics.items():
                 raw_scores = metric(
@@ -315,12 +327,12 @@ class ExplanationMetricsImage:
                 elif metric_name == "MPRT" or metric_name == "SmoothMPRT":
                     batch_results[metric_name] = self._aggregate_MPRT_scores(raw_scores)
                 else:
-                    batch_results[metric_name] = (np.nanmean(raw_scores) if isinstance(raw_scores, list) else raw_scores)
+                    batch_results[metric_name] = (np.nanmean([v for v in raw_scores if not np.isnan(v) and not np.isinf(v)]) if isinstance(raw_scores, list) else raw_scores)
         del raw_scores
         gc.collect()
         return batch_results
     
-    def evaluate(self, start_idx, end_idx, metric_names, xai_method_name, channel_first=True, softmax=False, batch_size=2,quantus_bs=2):
+    def evaluate(self, start_idx, end_idx, metric_names, xai_method_name, channel_first=True, softmax=False, batch_size=4,quantus_bs=4):
         """
         Evaluates a list of Quantus metrics on a batch of samples.
 
