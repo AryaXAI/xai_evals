@@ -51,6 +51,5 @@ def backtrace_dl_explain(model, inputs, targets, backtrace,mode_name,torch_model
                 batch_relevance.append(relevance[list(relevance.keys())[-1]])
 
         batch_relevance = np.array(batch_relevance)
-    #print("shape",inputs.shape,batch_relevance.shape)
 
     return batch_relevance
