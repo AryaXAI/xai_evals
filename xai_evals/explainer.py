@@ -1,4 +1,3 @@
-# shap_lime_explainer/explainer.py
 import shap
 import lime.lime_tabular
 import numpy as np
