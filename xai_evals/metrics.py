@@ -1,665 +1,960 @@
+import shap
+import lime.lime_tabular
+import numpy as np
 import pandas as pd
-import numpy as np
 import torch
+from sklearn.linear_model import LogisticRegression, SGDClassifier, LogisticRegressionCV, RidgeClassifier, ElasticNet
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, AdaBoostClassifier, BaggingClassifier, VotingClassifier, HistGradientBoostingClassifier, ExtraTreesClassifier
+from sklearn.svm import SVC
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.neighbors import KNeighborsClassifier, NearestCentroid
+from sklearn.naive_bayes import GaussianNB
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
+from tqdm import tqdm
+from sklearn.cluster import KMeans
+from sklearn.neural_network import MLPClassifier
+from catboost import CatBoostClassifier
+from lightgbm import LGBMClassifier
+from xgboost import XGBClassifier
 import tensorflow as tf
-from xai_evals.explainer import LIMEExplainer, SHAPExplainer, DlBacktraceTabularExplainer, TorchTabularExplainer, TFTabularExplainer
-from sklearn.base import is_regressor, is_classifier
-import tensorflow as tf
-from tf_explain.core import IntegratedGradients, VanillaGradients, GradCAM, SmoothGrad, OcclusionSensitivity
-import numpy as np
-import quantus
-from tensorflow.keras.utils import to_categorical
+import xgboost as xgb
+from tf_explain.core.grad_cam import GradCAM
+from tf_explain.core.occlusion_sensitivity import OcclusionSensitivity
 from dl_backtrace.tf_backtrace import Backtrace as TFBacktrace
 from dl_backtrace.pytorch_backtrace import Backtrace as TorchBacktrace
-from xai_evals.utils import backtrace_quantus
+from captum.attr import (
+    IntegratedGradients, Saliency, DeepLift, GuidedBackprop, InputXGradient,
+    DeepLiftShap, GradientShap, Deconvolution, GuidedGradCam, LayerGradCam,
+    Occlusion, FeatureAblation, ShapleyValueSampling, ShapleyValues, NoiseTunnel
+)
+from captum.attr import LayerAttribution
 
-
-class ExplanationMetricsImage:
-    """
-    A wrapper class to evaluate explanations using Quantus metrics, supporting both PyTorch and TensorFlow models.
-    """
-
-    def __init__(self, model, data_loader, framework="torch", device=None, num_classes=10):
-        """
-        Initializes the wrapper with the model, dataset, and framework.
-
-        Args:
-            model (torch.nn.Module or tf.keras.Model): The trained model.
-            data_loader (DataLoader or tf.data.Dataset): DataLoader for test data.
-            framework (str): Framework of the model ('torch' or 'tensorflow').
-            device (torch.device, optional): Device to perform computations (for PyTorch models).
-        """
+class DlBacktraceImageExplainer:
+    def __init__(self, model,):
         self.model = model
-        self.data_loader = data_loader
-        self.framework = framework.lower()
-        self.device = device
-        self.num_classes = num_classes
-
-        if self.framework == "torch":
-            self.model.eval()
-            
-        # Predefined configuration for metrics
-        self.metrics_config = {
-            "FaithfulnessCorrelation": quantus.FaithfulnessCorrelation(subset_size=16),
-            "MaxSensitivity": quantus.MaxSensitivity(disable_warnings=True),
-            "MPRT": quantus.MPRT(disable_warnings=True),
-            "SmoothMPRT": quantus.SmoothMPRT(disable_warnings=True),
-            "AvgSensitivity": quantus.AvgSensitivity(disable_warnings=True),
-            "FaithfulnessEstimate": quantus.FaithfulnessEstimate(perturb_baseline="black", normalise=True),
-        }
- 
-        # Predefined configuration for explanation methods
-        if self.framework == "torch":
-            self.xai_methods_config = {
-                "IntegratedGradients": {"xai_lib": "captum", "method": "IntegratedGradients"},
-                "Saliency": {"xai_lib": "captum", "method": "Saliency"},
-                "DeepLift": {"xai_lib": "captum", "method": "DeepLift"},
-                "GradientShap": {"xai_lib": "captum", "method": "GradientShap"},
-                "Occlusion": {"xai_lib": "captum", "method": "Occlusion"},
-                'DeepLiftShap': {"xai_lib": "captum", "method": "DeepLiftShap"},
-                'InputXGradient': {"xai_lib": "captum", "method": "InputXGradient"},
-                'Saliency': {"xai_lib": "captum", "method": "Saliency"},
-                'FeatureAblation': {"xai_lib": "captum", "method": "FeatureAblation"},
-                'Deconvolution': {"xai_lib": "captum", "method": "Deconvolution"},
-                'FeaturePermutation': {"xai_lib": "captum", "method": "FeaturePermutation"},
-                'Lime': {"xai_lib": "captum", "method": "Lime"},
-                'KernelShap': {"xai_lib": "captum", "method": "KernelShap"},
-                'LRP': {"xai_lib": "captum", "method": "LRP"},
-                'Gradient': {"xai_lib": "captum", "method": "Gradient"},
-                'LayerGradCam': {"xai_lib": "captum", "method": "LayerGradCam"},
-                'GuidedGradCam': {"xai_lib": "captum", "method": "GuidedGradCam"},
-                'LayerConductance': {"xai_lib": "captum", "method": "LayerConductance"},
-                'LayerActivation': {"xai_lib": "captum", "method": "LayerActivation"},
-                'InternalInfluence': {"xai_lib": "captum", "method": "InternalInfluence"},
-                'LayerGradientXActivation': {"xai_lib": "captum", "method": "LayerGradientXActivation"},
-                'Control Var. Sobel Filter': {"xai_lib": "captum", "method": "Control Var. Sobel Filter"},
-                'Control Var. Constant': {"xai_lib": "captum", "method": "Control Var. Constant"},
-                'Control Var. Random Uniform': {"xai_lib": "captum", "method": "Control Var. Random Uniform"},
-            }
-        elif self.framework == "tensorflow":
-            self.xai_methods_config = {
-                "VanillaGradients": {"xai_lib": "tf-explain", "method": "VanillaGradients"},
-                "GradCAM": {"xai_lib": "tf-explain", "method": "GradCAM"},
-                "GradientsInput": {"xai_lib": "tf-explain", "method": "VanillaGradients"},
-                "IntegratedGradients": {"xai_lib": "tf-explain", "method": "IntegratedGradients"},
-                "OcclusionSensitivity": {"xai_lib": "tf-explain", "method": "OcclusionSensitivity"},
-                "SmoothGrad": {"xai_lib": "tf-explain", "method": "SmoothGrad"},
-            }
-        elif self.framework == "backtrace":
-            print("Backtrace Framework Explaination")
+        # Automatically detect whether the model is TensorFlow or PyTorch
+        if isinstance(self.model, tf.keras.Model):  # TensorFlow model
+            self.framework = "tensorflow"
+            self.backtrace = TFBacktrace(model=model)
+            self.inp_layer = self.backtrace.model_resource["inputs"][0]
+        elif isinstance(self.model, torch.nn.Module):  # PyTorch model
+            self.framework = "pytorch"
+            self.backtrace = TorchBacktrace(model=model)
+            self.inp_layer = 'identity'
         else:
-            raise ValueError(f"Unsupported framework: {framework}")
+            raise ValueError("Unsupported model type. Only TensorFlow and PyTorch models are supported.")
+    
+    def get_last_conv_layer(self,model):
+        last_conv = None
+        for name, module in model.named_modules():
+            if isinstance(module, torch.nn.Conv2d):
+                last_conv = module
+        return last_conv
+    
+    def explain(self, test_data, instance_idx=0,mode='default',scaler=1,thresholding=0,task='binary-classification',contrast_mode='Positive'):
+        relevance = None
+        self.test_data = test_data
+        self.instance_idx = instance_idx
+        self.mode = mode
+        self.scaler = scaler
+        self.thresholding = thresholding
+        self.task = task
+        if self.mode == 'contrast':
+            self.contrast_mode = contrast_mode
+        else:
+            self.contrast_mode = None
 
-    def evaluate(self, start_idx, end_idx, metric_names, xai_method_name,channel_first=True,softmax=False):
-        """
-        Evaluates a list of Quantus metrics on a batch of samples.
+        if isinstance(self.test_data, torch.utils.data.DataLoader):
+            dataset = self.test_data.dataset
+            image, label = dataset[self.instance_idx]
+            instance = image.unsqueeze(0).to(next(self.model.parameters()).device)  # [1, C, H, W]
+            label = label
 
-        Args:
-            start_idx (int): Start index of the batch from the data loader.
-            end_idx (int): End index of the batch from the data loader.
-            metric_names (list): List of metric names to evaluate.
-            xai_method_name (str): Name of the XAI method.
+        # If input is a Tensor or NumPy array (single image), use the provided data
+        elif isinstance(self.test_data, torch.Tensor):
+            image = self.test_data[self.instance_idx] if instance_idx is not None else test_data
+            instance = image.unsqueeze(0).to(next(self.model.parameters()).device)  # [1, C, H, W]
+            label = None  # For single image, label can be None or passed externally
 
-        Returns:
-            dict: Aggregated scores for each metric.
-        """
-        # Prepare batch data
-        self.softmax = softmax
-        self.channel_first = channel_first
-        x_batch, y_batch = self._prepare_data(start_idx, end_idx)
-
-        if self.framework == "backtrace":
-            if isinstance(self.model, tf.keras.Model):  # TensorFlow model
-                self.backtrace_intitial = TFBacktrace(model=self.model)
-            elif isinstance(self.model, torch.nn.Module):  # PyTorch model
-                self.backtrace_intitial = TorchBacktrace(model=self.model)
-
-        # Wrapper to integrate Backtrace with Quantus
-            
-            if xai_method_name == "default":
-                mode = "default"
-                cmode = None
-            elif xai_method_name == "contrast-positive":
-                mode = "contrast"
-                cmode = "Positive"
-            elif xai_method_name == "contrast-negative":
-                mode = "contrast"
-                cmode = "Negative"
-            elif xai_method_name == "contrast":
-                mode = "contrast"
-                cmode = "Positive"  
-            else:
-                mode = "default"
-            
-            metrics = {name: self.metrics_config[name] for name in metric_names}
-            method_explanation = { 'Backtrace': backtrace_quantus }
-
-            # Compute scores for each metric
-            aggregated_scores = {}
-            for metric_name, metric in metrics.items():
-                raw_scores = metric(
-                    model=self.model,
-                    x_batch=x_batch,
-                    y_batch=y_batch,
-                    device=self.device,
-                    explain_func=backtrace_quantus,
-                    explain_func_kwargs={'backtrace': self.backtrace_intitial,'mode':mode, 'cmode':cmode},
-                    channel_first=self.channel_first,
-                    softmax=self.softmax
-                )
-                if metric_name == "Continuity":
-                    aggregated_scores[metric_name] = self._aggregate_continuity_scores(raw_scores)
-                elif metric_name == "MPRT" or metric_name == "SmoothMPRT":
-                    aggregated_scores[metric_name] = self._aggregate_MPRT_scores(raw_scores)
-                else:
-                    aggregated_scores[metric_name] = (
-                        np.nanmean(raw_scores) if isinstance(raw_scores, list) else raw_scores
-                    )
-            return aggregated_scores
+        elif isinstance(self.test_data, np.ndarray):
+            image = self.test_data[self.instance_idx] if instance_idx is not None else test_data
+            instance = np.expand_dims(image, 0)
+            label = None  # For single image, label can be None or passed externally
 
         else:
-            # Ensure the selected XAI method and metrics exist
-            if xai_method_name not in self.xai_methods_config:
-                raise ValueError(f"XAI method '{xai_method_name}' is not configured.")
-            if not all(metric in self.metrics_config for metric in metric_names):
-                raise ValueError("One or more metrics are not configured.")
+            raise ValueError("Invalid test data type. Must be Tensor, NumPy array, or DataLoader.")
 
-            # Prepare XAI method and metric instances
-            explain_func_kwargs = self.xai_methods_config[xai_method_name]
-            metrics = {name: self.metrics_config[name] for name in metric_names}
+        if self.framework == "pytorch":
+            instance = torch.tensor(instance, dtype=torch.float32)
 
-            # Compute scores for each metric
-            aggregated_scores = {}
-            for metric_name, metric in metrics.items():
-                raw_scores = metric(
-                    model=self.model,
-                    x_batch=x_batch,
-                    y_batch=y_batch,
-                    device=self.device,
-                    explain_func=quantus.explain,
-                    explain_func_kwargs=explain_func_kwargs,
-                    channel_first=self.channel_first,
-                    softmax=self.softmax
-                )
-                if metric_name == "Continuity":
-                    aggregated_scores[metric_name] = self._aggregate_continuity_scores(raw_scores)
-                elif metric_name == "MPRT" or metric_name == "SmoothMPRT":
-                    aggregated_scores[metric_name] = self._aggregate_MPRT_scores(raw_scores)
-                else:
-                    aggregated_scores[metric_name] = (
-                        np.nanmean(raw_scores) if isinstance(raw_scores, list) else raw_scores
-                    )
-
-            return aggregated_scores
-
-    def _prepare_data(self, start_idx, end_idx):
-        """
-        Prepares a batch of data for Quantus evaluation.
-
-        Args:
-            start_idx (int): Start index of the batch.
-            end_idx (int): End index of the batch.
-
-        Returns:
-            tuple: x_batch (numpy.ndarray, torch.Tensor, or tf.Tensor), y_batch (numpy.ndarray, torch.Tensor, or tf.Tensor)
-        """
-        x_batch, y_batch = [], []
-
-        # Case 1: PyTorch DataLoader (torch.utils.data.DataLoader)
-        if isinstance(self.data_loader, torch.utils.data.DataLoader):
-            dataset = self.data_loader.dataset
-            for idx in range(start_idx, end_idx):
-                image, label = dataset[idx]
-                x_batch.append(image.numpy())
-                y_batch.append(label)
-            
-            # Convert to the correct type (either torch.Tensor or numpy array)
-            x_batch = np.stack(x_batch)
-            y_batch = np.array(y_batch)
-
-        # Case 2: TensorFlow DataLoader (tf.data.Dataset)
-        elif isinstance(self.data_loader, tf.data.Dataset):
-            #data = list(self.data_loader.unbatch().take(end_idx - start_idx).as_numpy_iterator())
-            data = list(self.data_loader.skip(start_idx).unbatch().take(end_idx - start_idx).as_numpy_iterator())
-            x_batch, y_batch = zip(*data)
-            x_batch = np.stack(x_batch)
-            y_batch = np.array(y_batch)
-
-            # Ensure labels are non-categorical integers (0, 1, 2, ...)
-            if len(y_batch.shape) > 1 :
-                y_batch = to_categorical(y_batch)
-                y_batch = np.argmax(y_batch, axis=1)
-
-        # Case 3: Tuple (numpy.ndarray, numpy.ndarray) or (torch.Tensor, torch.Tensor)
-        elif isinstance(self.data_loader, tuple):
-            data, labels = self.data_loader
-            if end_idx > start_idx:
-                if start_idx == 0 and end_idx == 1:
-                    x_batch = data
-                    y_batch = labels
-                else:
-                    x_batch = data[start_idx:end_idx]
-                    y_batch = labels[start_idx:end_idx]
-
-            # Ensure the data and labels are in the correct format
-            #if isinstance(x_batch, np.ndarray):
-            #x_batch = torch.tensor(x_batch, dtype=torch.float32)
-
-            if isinstance(x_batch, torch.Tensor):
-                x_batch = x_batch.numpy()
-            elif isinstance(x_batch, tf.Tensor):
-                x_batch = x_batch.numpy()
-            
-
-            if isinstance(y_batch, torch.Tensor):
-                y_batch = y_batch.numpy()
-            elif isinstance(y_batch, tf.Tensor):
-                y_batch = y_batch.numpy()
-
-            # Ensure labels are non-categorical (integer labels)
-            if len(y_batch.shape) > 1 :
-                y_batch = to_categorical(y_batch)
-                y_batch = np.argmax(y_batch, axis=1)
-
-        # Case 4: Raw PyTorch Dataset (torch.utils.data.Dataset)
-        elif isinstance(self.data_loader, torch.utils.data.Dataset):
-            x_batch, y_batch = [], []
-            for idx in range(start_idx, end_idx):
-                image, label = self.data_loader[idx]
-                x_batch.append(image)
-                y_batch.append(label)
-
-            # Convert lists to tensors or numpy arrays
-            x_batch = np.stack(x_batch)
-            y_batch = np.array(y_batch)
-
-        # Case 5: Invalid Data Type
-        else:
-            raise ValueError("Invalid data type. Expected DataLoader, Dataset, or Tuple of arrays.")
-
-        return x_batch, y_batch
-
-    def _aggregate_continuity_scores(self, scores):
-        """
-        Aggregates the dictionary-based Continuity scores.
-
-        Args:
-            scores (dict): Continuity score dictionary.
-
-        Returns:
-            float: Aggregated score (mean across all keys and values).
-        """
-        all_values = []
-        for key, value in scores.items():
-            if isinstance(value, list):
-                all_values.extend(value)
-            elif isinstance(value, dict):  # Nested dictionary case
-                for sub_key, sub_value in value.items():
-                    if isinstance(sub_value, list):
-                        all_values.extend(sub_value)
-        return np.nanmean(all_values)
-    def _aggregate_MPRT_scores(self, scores):
-        mprt_dict = {}
-        for key, value in scores.items():
-            mprt_dict[key] = np.nanmean(np.array(value))
-        return mprt_dict
-
-class ExplanationMetricsTabular:
-    def __init__(self, 
-                 model, 
-                 explainer_name, 
-                 X_train, 
-                 X_test, 
-                 y_test, 
-                 features, 
-                 task, 
-                 method="None",
-                 metrics=None,
-                 scaler=1,
-                 thresholding=0.5,
-                 start_idx=0, 
-                 end_idx=None,
-                 subset_samples=False,
-                 subset_number=100):
-        """
-        Initialize ExplanationMetrics class.
+        # Step 1: Get the layer outputs using the Backtrace model
+        layer_outputs = self.backtrace.predict(instance)
         
-        - If explainer_name is 'shap' or 'lime', we assume a sklearn-like model.
-        - If explainer_name is 'torch', 'tensorflow', or 'backtrace', we assume a deep learning model (TF or Torch).
+        # Step 2: Get the layer-wise relevance using DLBacktrace
+        relevance = self.backtrace.eval(
+            layer_outputs,
+            mode=self.mode,
+            scaler=self.scaler,
+            thresholding=self.thresholding,
+            task=self.task
+        )
 
-        For TF/Torch models:
-        - If classification, ensure the model outputs probabilities or manually apply softmax/sigmoid before extracting class probabilities.
-        - If regression, directly return numeric predictions.
+        if self.framework == "pytorch":
+            if self.mode == 'default':
+                attr_2d = np.mean(relevance[self.inp_layer],axis=-3)
+            elif self.mode == 'contrast':
+                attr_2d = np.mean(relevance[self.inp_layer][self.contrast_mode],axis=-3)
+            else:
+                attr_2d = np.mean(relevance[self.inp_layer],axis=-3)
+        else:
+            # Aggregate attributions over channels (RGB) by taking the mean
+            if self.mode == 'default':
+                attr_2d = np.mean(relevance[self.inp_layer],axis=-1)
+            elif self.mode == 'contrast':
+                attr_2d = np.mean(relevance[self.inp_layer][self.contrast_mode],axis=-1)
+            else:
+                attr_2d = np.mean(relevance[self.inp_layer],axis=-1)
+
+        return attr_2d
+
+class TorchImageExplainer:
+    """
+    Wrapper for Captum explainers.
+    """
+    def __init__(self, model):
+        self.model = model
+        self.model.eval()
+        self.last_conv_layer = self.get_last_conv_layer(model)
+
+    def get_last_conv_layer(self,model):
+        """
+        Retrieves the last convolutional layer of the model.
+        
+        Args:
+            model (nn.Module): The CNN model.
+        
+        Returns:
+            nn.Module: The last convolutional layer.
+        """
+        last_conv = None
+        for name, module in model.named_modules():
+            if isinstance(module, torch.nn.Conv2d):
+                last_conv = module
+        return last_conv
+
+    def explain(self, testdata, idx=None, method="grad_cam", task="classification"):
+        """
+        Generates attributions for a specific test sample using a specified method.
+        
+        Args:
+            testloader (DataLoader): DataLoader for test data.
+            idx (int): Index of the test sample.
+            method (str): Attribution method to use.
+            task (str): Task type, default is "classification".
+        
+        Returns:
+            np.ndarray: 2D attribution map.
+        """
+        # If input is a DataLoader (batch of images), extract the specific image and label
+        if isinstance(testdata, torch.utils.data.DataLoader):
+            dataset = testdata.dataset
+            image, label = dataset[idx]
+            image = image.unsqueeze(0).to(next(self.model.parameters()).device)  # [1, C, H, W]
+            label = label
+
+        # If input is a Tensor or NumPy array (single image), use the provided data
+        elif isinstance(testdata, torch.Tensor):
+            image = testdata[idx] if idx is not None else testdata
+            image = image.unsqueeze(0).to(next(self.model.parameters()).device)  # [1, C, H, W]
+            label = None  # For single image, label can be None or passed externally
+
+        elif isinstance(testdata, np.ndarray):
+            image = testdata[idx] if idx is not None else testdata
+            image = torch.tensor(image).float().unsqueeze(0).to(next(self.model.parameters()).device)  # [1, C, H, W]
+            label = None  # For single image, label can be None or passed externally
+
+        else:
+            raise ValueError("Invalid test data type. Must be Tensor, NumPy array, or DataLoader.")
+
+
+        with torch.no_grad():
+            logits = self.model(image)
+            preds = torch.softmax(logits, dim=1)
+            pred_class = torch.argmax(preds, dim=1).item()
+
+        baseline = torch.zeros_like(image).to(image.device)
+
+        if method == "integrated_gradients":
+            explainer = IntegratedGradients(self.model)
+            attributions = explainer.attribute(image, baselines=baseline, target=pred_class)
+        elif method == "saliency":
+            explainer = Saliency(self.model)
+            attributions = explainer.attribute(image, target=pred_class)
+        elif method == "deep_lift":
+            explainer = DeepLift(self.model)
+            attributions = explainer.attribute(image, baselines=baseline, target=pred_class)
+        elif method == "guided_backprop":
+            explainer = GuidedBackprop(self.model)
+            attributions = explainer.attribute(image, target=pred_class)
+        elif method == "input_x_gradient":
+            explainer = InputXGradient(self.model)
+            attributions = explainer.attribute(image, target=pred_class)
+        elif method == "deep_lift_shap":
+            explainer = DeepLiftShap(self.model)
+            #baselines = [torch.randn_like(image)*0.1 for _ in range(5)]
+            baseline = torch.randn_like(image).repeat(5, 1, 1, 1) * 0.1  # Shape: [5, C, H, W]
+            attributions = explainer.attribute(image, baselines=baseline, target=pred_class)
+        elif method == "gradient_shap":
+            explainer = GradientShap(self.model)
+            #baselines = [torch.randn_like(image)*0.1 for _ in range(5)]
+            baseline = torch.randn_like(image) * 0.1
+            attributions = explainer.attribute(image, baselines=baseline, target=pred_class, stdevs=0.09)
+        elif method == "deconvolution":
+            explainer = Deconvolution(self.model)
+            attributions = explainer.attribute(image, target=pred_class)
+        elif method == "guided_gradcam":
+            explainer = GuidedGradCam(self.model, self.last_conv_layer)
+            attributions = explainer.attribute(image, target=pred_class)
+        elif method == "layer_gradcam":
+            explainer = LayerGradCam(self.model, self.last_conv_layer)
+            attributions = explainer.attribute(image, target=pred_class)
+            attributions = LayerAttribution.interpolate(attributions, image.shape[2:])
+        elif method == "occlusion":
+            explainer = Occlusion(self.model)
+            attributions = explainer.attribute(
+                image, target=pred_class, baselines=baseline, 
+                sliding_window_shapes=(3,8,8)
+            )
+        elif method == "feature_ablation":
+            explainer = FeatureAblation(self.model)
+            attributions = explainer.attribute(image, target=pred_class, baselines=baseline)
+        elif method == "shapley_value_sampling":
+            explainer = ShapleyValueSampling(self.model)
+            attributions = explainer.attribute(image, target=pred_class, baselines=baseline, n_samples=50)
+        elif method == "shapley_values":
+            explainer = ShapleyValues(self.model)
+            attributions = explainer.attribute(image, target=pred_class, baselines=baseline)
+        elif method == "noise_tunnel":
+            base_explainer = IntegratedGradients(self.model)
+            explainer = NoiseTunnel(base_explainer)
+            attributions = explainer.attribute(
+                image, 
+                target=pred_class, 
+                nt_type='smoothgrad',   # Type of noise (can also be 'vanilla')
+                stdevs=0.02            # Standard deviation of noise
+            )
+        else:
+            raise ValueError("Unsupported method")
+
+        # Aggregate attributions over channels (RGB) by taking the mean
+        attr_2d = attributions.mean(dim=1).squeeze(0).detach().cpu().numpy()
+        return attr_2d
+
+class TFImageExplainer:
+    """
+    Wrapper for tf-explain explainers for TensorFlow models.
+    Handles both single image and dataset cases.
+    """
+    def __init__(self, model):
+        """
+        Initializes the explainer with a TensorFlow model.
         """
         self.model = model
-        self.explainer_name = explainer_name.lower()
-        if self.explainer_name=="backtrace":
-            self.method = method.lower()
+        self.model.trainable = False  # Set model to inference mode
+        self.last_conv_layer = self._get_last_conv_layer()
+        self.is_single_image = False
+
+    def _get_last_conv_layer(self):
+        """
+        Get the last convolutional layer of the model for GradCAM.
+        """
+        for layer in reversed(self.model.layers):
+            if isinstance(layer, tf.keras.layers.Conv2D):
+                return layer
+        raise ValueError("No convolutional layer found in the model")
+
+    def explain(self, testset, idx=None, method="grad_cam",task=None,label=0):
+        """
+        Generates attributions for a specific test sample using a specified method.
+        """
+        # Check if the input is a single image (NumPy array or TensorFlow tensor)
+                # Determine class index
+        if isinstance(testset, (np.ndarray, tf.Tensor)):
+            # If idx is None, process the entire single image
+            if idx is not None:
+                raise ValueError("For single image input, idx should be None.")
+            image = testset
+            self.is_single_image = True
+            class_index = int(label)
+        elif isinstance(testset, tf.data.Dataset):
+            # If it's a TensorFlow Dataset, handle idx
+            self.is_single_image = False
+            batch = list(testset.take(idx // testset.cardinality().numpy() + 1))[-1]  # Retrieve the required batch
+            images, labels = batch
+
+            # Get the specific image and label from the batch
+            image = images[idx % images.shape[0]]
+            label = labels[idx % images.shape[0]]
+            class_index = int(label)
         else:
-            self.method = method
-        self.X_train = X_train
+            raise ValueError("Unsupported input type. Expected a NumPy array, TensorFlow tensor, or Dataset.")
+
+        image = tf.expand_dims(image, axis=0)  # This ensures the image has shape (1, height, width, channels)
+        image_numpy = image.numpy()  # Convert to NumPy for compatibility with tf-explain
+
+        # Choose the appropriate explanation method
+        if method == "grad_cam":
+            explainer = GradCAM()
+            if class_index is None:
+                raise ValueError("class_index must be provided for GradCAM in classification tasks.")
+            attributions = explainer.explain((image_numpy, None), self.model, class_index=class_index, layer_name=self.last_conv_layer.name)
+
+        elif method == "occlusion":
+            explainer = OcclusionSensitivity()
+            if class_index is None:
+                raise ValueError("class_index must be provided for OcclusionSensitivity in classification tasks.")
+            attributions = explainer.explain((image_numpy, None), self.model, class_index=class_index, patch_size=8)
+
+        else:
+            raise ValueError(f"Unsupported method: {method}")
+
+        # Convert the attribution to 2D by averaging over channels (RGB)
+        attr_2d = np.mean(attributions, axis=-1)  # This collapses the channels to provide a 2D map
+        return attr_2d
+
+class SHAPExplainer:
+    def __init__(self, model, features, task="binary-classification", X_train=None,classification_threshold=0.5,subset_samples=False,subset_number=100):
+        """
+        Initialize SHAP Explainer with model, features, and training data.
+        :param model: Trained model (e.g., LogisticRegression, RandomForest, etc.)
+        :param features: List of feature names
+        :param task: Either "classification" or "regression"
+        :param X_train: Training data used for SHAP explainer initialization
+        """
+        self.model = model
+        self.features_original = features
+        self.features = features.str.replace(' ', '_')
+        self.task = task
+        self.subset_samples = subset_samples
+        self.subset_number = subset_number
+        self.shap_type = None
+        if X_train is None and not hasattr(self.model, 'predict_proba'):
+            raise ValueError("Training data (X_train) must be provided for SHAP explainer.")
+        self.explainer = self._select_explainer(X_train)
+        self.classification_threshold = classification_threshold
+        
+        
+
+    def _select_explainer(self, X_train):
+        #if not isinstance(X_train, np.ndarray):
+        #X_train.columns = X_train.columns.str.replace(' ', '_')
+
+        """Select the appropriate SHAP explainer based on model type."""
+        if self.subset_samples:
+            X_train_sample = shap.kmeans(X=X_train, k=self.subset_number).data
+        else:
+            pass
+       
+        if isinstance(self.model,(GradientBoostingClassifier)) and self.task == "multiclass-classification":
+            raise ValueError("SHAP explanation doesnt support SHAP for multi-class classification")
+        elif isinstance(self.model, (KMeans,NearestCentroid,BaggingClassifier,VotingClassifier)):
+            raise ValueError("SHAP explanation not supported for the Model.")
+        elif isinstance(self.model, (RidgeClassifier)):
+            raise ValueError("Model does have predict probability hence it not support SHAP explanation.")           
+        elif isinstance(self.model, (HistGradientBoostingClassifier,LGBMClassifier, CatBoostClassifier,RandomForestClassifier, DecisionTreeClassifier, xgb.XGBClassifier, GradientBoostingClassifier, ExtraTreesClassifier)):
+            #AdaBoostClassifier,BaggingClassifier not supported by treeshap
+            self.shap_type = "Tree"
+            if self.subset_samples:
+                return shap.TreeExplainer(self.model, X_train_sample)
+            else:
+                return shap.TreeExplainer(self.model, X_train)
+        elif isinstance(self.model, torch.nn.Module): 
+            self.shap_type = "NN"
+            return shap.DeepExplainer(self.model, torch.tensor(X_train.values).float()) 
+        elif hasattr(self.model, 'coef_') or isinstance(self.model, (LogisticRegression,LogisticRegressionCV,ElasticNet)):
+            self.shap_type = "LRegression"
+            return shap.LinearExplainer(self.model, X_train)
+        else:
+            self.shap_type = "NOA"
+            return shap.KernelExplainer(self._model_predict, X_train)
+
+    def _model_predict(self, X):
+        """Wrapper for model's prediction function to ensure compatibility with SHAP."""
+        if isinstance(X, np.ndarray):
+            X = pd.DataFrame(X, columns=self.features_original)
+        return self.model.predict_proba(X)
+
+    def explain(self, X_test, instance_idx=0):
+        """
+        Explain a specific instance using SHAP.
+        :param X_test: Test dataset (as DataFrame or numpy array)
+        :param instance_idx: Index of the instance to explain
+        :return: DataFrame of feature attributions for the explained instance
+        """
+        X_test = pd.DataFrame(X_test, columns=self.features_original)
+        x_instance = X_test.iloc[instance_idx:instance_idx+1]
+        try:
+            shap_values = self.explainer.shap_values(np.array(x_instance))
+        except Exception as e:
+        # Catch general exceptions and check for ExplainerError
+            if "Additivity check failed" in str(e):
+                print("ExplainerError encountered:", e)
+                print("Retrying with additivity check disabled...")
+                
+                # Retry with check_additivity=False
+                shap_values =  self.explainer.shap_values(np.array(x_instance),check_additivity=False)
+                print("SHAP values computed with additivity check disabled!")
+            else:
+                # Re-raise the exception if it's not related to the additivity check
+                raise
+        attributions = shap_values
+        #print(self.task,self.shap_type,attributions.shape)
+        if self.task == "binary-classification" or "binary" in self.task:
+            if len(attributions.shape) == 3:
+                idx = np.argmax(self._model_predict(x_instance))
+                attributions = attributions[:,:,idx]
+        elif self.task == "multiclass-classification" or "multiclass" in self.task:
+            if len(attributions.shape) == 3:
+                idx = np.argmax(self._model_predict(x_instance))
+                attributions = attributions[:,:,idx]
+        elif self.task == "multi-label-classification":
+            pass
+        else:
+            pass
+        #print(attributions.shape)
+        return self._format_attributions(attributions, x_instance)
+
+    def _format_attributions(self, attributions, x_instance):
+        """Format SHAP attributions into a DataFrame."""
+        attributions = attributions.flatten()
+        feature_values = x_instance.values.flatten()
+        attribution_df = pd.DataFrame({
+            'Feature': self.features,
+            'Value': feature_values,
+            'Attribution': attributions
+        })
+        attribution_df = attribution_df.sort_values(by="Attribution", key=abs, ascending=False)
+        return attribution_df
+
+class LIMEExplainer:
+    def __init__(self, model, features, task="binary-classification", X_train=None,model_classes=None):
+        """
+        Initialize LIME Explainer with model, features, and training data.
+        :param model: Trained model (e.g., LogisticRegression, RandomForest, etc.)
+        :param features: List of feature names
+        :param task: Either "classification" or "regression"
+        :param X_train: Training data used for LIME explainer initialization
+        """
+        self.model = model
+        self.features = features
+        if isinstance(X_train, pd.DataFrame):
+            self.X_train = X_train
+        elif isinstance(X_train, np.ndarray):
+            self.X_train = pd.DataFrame(X_train, columns=self.features)
+
+        self.features = [feature.replace(' ', '_') for feature in self.features]
+        self.task = task
+        self.model_classes = model_classes
+        self.categorical_features = self._identify_categorical_features()
+        self.X_train = self.X_train.to_numpy()
+        # Identify categorical features based on dtype
+        if self.task == "Regression" or self.task == "regression":
+            self.shap_task = "regression"
+        else:
+            self.shap_task = "classification"
+
+        if X_train is None:
+            raise ValueError("Training data (X_train) must be provided for LIME explainer.")
+
+        self.explainer = lime.lime_tabular.LimeTabularExplainer(
+            training_data=self.X_train,
+            feature_names=self.features,
+            class_names=self.model_classes,
+            categorical_features=self.categorical_features,
+            mode=self.shap_task
+        )
+    
+    def _identify_categorical_features(self):
+        """
+        Identifies categorical features based on their dtype.
+        Assumes that categorical features are of type 'object' or 'category'.
+        Additionally considers numeric columns with a low number of unique values as categorical.
+        """
+        categorical_features = []
+
+        # Identify categorical features based on dtype
+        for i, dtype in enumerate(self.X_train.dtypes):
+            if dtype == 'object' or dtype.name == 'category':  # Traditional categorical types
+                categorical_features.append(i)
+            elif dtype in ['int64', 'float64']:  # Numeric types
+                # Check if the number of unique values is small, indicating it might be categorical
+                if len(self.X_train.iloc[:, i].unique()) < 10:
+                    categorical_features.append(i)
+
+        return categorical_features
+
+    def explain(self, X_test, instance_idx=0):
+        """
+        Explain a specific instance using LIME.
+        :param X_test: Test dataset (as DataFrame or numpy array)
+        :param instance_idx: Index of the instance to explain
+        :return: DataFrame of feature attributions for the explained instance
+        """
         if isinstance(X_test, pd.DataFrame):
             self.X_test = X_test.to_numpy()
         elif isinstance(X_test, np.ndarray):
             self.X_test = X_test
-        elif isinstance(X_test, torch.Tensor):
-            self.X_test = X_test.numpy()
+
+        X_test = pd.DataFrame(self.X_test, columns=self.features)
+        x_instance = X_test.iloc[instance_idx:instance_idx+1]
+        explanation = self.explainer.explain_instance(
+            X_test.iloc[instance_idx].values, self.model.predict_proba
+        )
+        return self._map_binned_to_original(explanation.as_list(), x_instance)
+
+    def _map_binned_to_original(self, attributions, x_instance):
+        """Map LIME's binned features back to original features."""
+        original_attributions = []
+        for feature, attribution in attributions:
+            if "<=" in feature or "<" in feature or ">" in feature:
+                original_feature = next(word.strip() for word in feature.split() if word.strip() in self.features)
+            else:
+                original_feature = feature
+            feature_value = x_instance[original_feature].values[0]
+            original_attributions.append((original_feature, feature_value, attribution))
+        attribution_df = pd.DataFrame(original_attributions, columns=['Feature', 'Value', 'Attribution'])
+        attribution_df['Attribution'] = attribution_df['Attribution'].abs()
+        return attribution_df
+
+class TFTabularExplainer:
+    def __init__(self, model, method, feature_names, X_train=None, task="binary-classification"):
+        """
+        Initialize a TF explainer for Integrated Gradients, SHAP, and LIME.
+        :param model: Trained TensorFlow/Keras model.
+        :param method: 'integrated_gradients_tf', 'shap_kernel', 'shap_deep', or 'lime'.
+        :param feature_names: List of feature names.
+        :param X_train: Training data (required for SHAP KernelExplainer and LIME).
+        :param task: "classification" or "regression".
+        """
+        self.model = model
+        self.feature_names = feature_names
+        self.method = method.lower()
+        self.X_train = X_train
+        self.task = task
+
+        # Validate method
+        if self.method not in ["shap_kernel", "shap_deep", "lime"]:
+            raise ValueError("Only 'shap_kernel', 'shap_deep', and 'lime' are supported.")
+
+        if self.method == "shap_kernel" and self.X_train is None:
+            raise ValueError("X_train is required for SHAP KernelExplainer.")
+        if self.method == "lime" and self.X_train is None:
+            raise ValueError("X_train is required for LIME.")
+
+        # Initialize explainers as needed
+        if self.method == "shap_kernel":
+            self.explainer = shap.KernelExplainer(self._model_predict, self.X_train)
+        elif self.method == "shap_deep":
+            #background = self.X_train if isinstance(self.X_train, tf.Tensor) else tf.convert_to_tensor(self.X_train, tf.float32)
+            self.explainer = shap.DeepExplainer(self.model, self.X_train)
+        elif self.method == "lime":
+            X_train_np = self.X_train if isinstance(self.X_train, np.ndarray) else self.X_train.numpy()
+            if self.task == "Regression" or self.task == "regression":
+                self.shap_task = "regression"
+            else:
+                self.shap_task = "classification"
+
+            self.explainer = lime.lime_tabular.LimeTabularExplainer(
+                training_data=X_train_np,
+                feature_names=self.feature_names,
+                class_names=None if self.task == "regression" else [0, 1],
+                mode=self.shap_task
+            )
+
+    def _model_predict(self, inputs):
+        """
+        Model prediction function for SHAP and LIME.
+        Ensures outputs are in the expected format (e.g., probabilities for classification).
+        """
+        inputs_tf = tf.convert_to_tensor(inputs, dtype=tf.float32)
+        outputs = self.model.predict(inputs_tf)  # shape: [batch, output_dim]
+
+        if self.task == "classification" or self.task == "binary-classification" or self.task=="multiclass-classification":
+            if outputs.shape[1] == 1:
+            # Convert single-probability output to two-class probabilities
+                return np.hstack([1 - outputs, outputs])
+        return outputs
+
+    def explain(self, inputs, target=0, instance_idx=None):
+        """
+        Explain the predictions for given inputs.
+        
+        Args:
+            inputs: A single instance or a batch of instances. If a batch is provided, specify instance_idx.
+            baseline: Baseline for integrated gradients if needed.
+            target: Target class index for integrated gradients or multi-class SHAP.
+            instance_idx: Index of the instance to explain within the batch.
+        
+        Returns:
+            A DataFrame with feature names, input values, and attributions.
+        """
+        if isinstance(inputs, tf.Tensor):
+            inputs_np = inputs.numpy()
+            print("1")
         else:
-            raise ValueError("X_test must be a DataFrame or ndarray.")
+            inputs_np = np.array(inputs, dtype=np.float32)
+
+        if instance_idx is None:
+            instance_idx = 0
+
+        single_input = inputs_np[instance_idx:instance_idx + 1]  # shape: [1, features]
+
+
+        if self.method == "shap_kernel" or self.method == "shap_deep":
+            shap_values = self.explainer.shap_values(single_input)
+            attributions = shap_values
+            #print(self.task,self.shap_type,attributions.shape)
+            if self.task == "binary-classification" or "binary" in self.task:
+                if len(attributions.shape) == 3:
+                    idx = np.argmax(self._model_predict(single_input))
+                    if self.method == "shap_deep":
+                        attributions = attributions[:,:,0]
+                    else:
+                        attributions = attributions[:,:,idx]
+            elif self.task == "multiclass-classification" or "multiclass" in self.task:
+                if len(attributions.shape) == 3:
+                    idx = np.argmax(self._model_predict(single_input))
+                    attributions = attributions[:,:,idx]
+            elif self.task == "multi-label-classification":
+                pass
+            else:
+                pass
+        elif self.method == "lime":
+            explanation = self.explainer.explain_instance(single_input[0], self._model_predict)
+            return self._map_binned_to_original(explanation.as_list(), single_input[0])
+
+        # Ensure attributions is at least 2D: [1, features]
+        attributions = np.array(attributions)
+        if attributions.ndim == 1:
+            attributions = attributions[np.newaxis, :]
+
+        print(single_input.shape,attributions.shape,self.feature_names)
+        # Create a results DataFrame
+        df = pd.DataFrame({
+            "Feature": self.feature_names,
+            "Value": single_input[0],
+            "Attribution": attributions[0]
+        })
+        df = df.sort_values(by="Attribution", key=np.abs, ascending=False)
+        return df
+
+    def _map_binned_to_original(self, attributions, x_instance):
+        """
+        Map the binned features from LIME to original features.
+        """
+        original_attributions = []
         
-        self.y_test = y_test
-        self.features = features
-        self.task = task.lower()
+        for feature, attribution in attributions:
+            if "<=" in feature or "<" in feature or ">" in feature:
+                original_feature = next(
+                    (word.strip() for word in feature.split() if word.strip() in self.feature_names),
+                    feature
+                )
+            else:
+                original_feature = feature
+
+            feature_index = self.feature_names.index(original_feature)
+            feature_value = x_instance[feature_index]
+
+            original_attributions.append((original_feature, feature_value, attribution))
+
+        attribution_df = pd.DataFrame(
+            original_attributions,
+            columns=["Feature", "Value", "Attribution"]
+        )
+        attribution_df = attribution_df.sort_values(by="Attribution", key=np.abs, ascending=False)
+        return attribution_df
+
+class TorchTabularExplainer:
+    def __init__(self, model, method, feature_names, X_train=None, task="binary-classification"):
+        """
+        Initialize the unified explainer for Captum, LIME, and SHAP.
+        :param model: Trained PyTorch model (for Captum).
+        :param method: Explanation method. Options:
+            - Captum: 'integrated_gradients', 'deep_lift', 'gradient_shap',
+                      'saliency', 'input_x_gradient', 'guided_backprop'
+            - SHAP: 'shap_kernel', 'shap_deep'
+            - LIME: 'lime'
+        :param feature_names: List of feature names corresponding to input features.
+        :param X_train: Training data (required for SHAP KernelExplainer and LIME).
+        :param task: Task type ('classification' or 'regression').
+        """
+        self.model = model
+        self.feature_names = feature_names
+        self.method = method.lower()
+        self.X_train = X_train
+        self.task = task
+
+        # Select the attribution method
+        self.explainer = self._select_method()
+
+    def _select_method(self):
+        """
+        Select the explanation method based on the specified input.
+        """
+        if self.method in ["integrated_gradients", "deep_lift", "gradient_shap", "saliency", "input_x_gradient", "guided_backprop"]:
+            return self._get_captum_method()
+        elif self.method == "shap_kernel":
+            if self.X_train is None:
+                raise ValueError("X_train is required for SHAP KernelExplainer.")
+            return shap.KernelExplainer(self._model_predict, self.X_train)
+        elif self.method == "shap_deep":
+            if isinstance(self.X_train, torch.Tensor):
+                pass
+            else:
+                self.X_train = torch.tensor(self.X_train, dtype=torch.float32)
+            return shap.DeepExplainer(self.model, self.X_train)
+        elif self.method == "lime":
+            if self.X_train is None:
+                raise ValueError("X_train is required for LIME.")
+            return lime.lime_tabular.LimeTabularExplainer(
+                training_data=self.X_train,
+                feature_names=self.feature_names,
+                class_names=None if self.task == "regression" else [0, 1],
+                mode=self.task
+            )
+        else:
+            raise ValueError(f"Unsupported explanation method: {self.method}")
+
+    def _get_captum_method(self):
+        """
+        Initialize the Captum method.
+        """
+        if self.method == "integrated_gradients":
+            return IntegratedGradients(self.model)
+        elif self.method == "deep_lift":
+            return DeepLift(self.model)
+        elif self.method == "gradient_shap":
+            return GradientShap(self.model)
+        elif self.method == "saliency":
+            return Saliency(self.model)
+        elif self.method == "input_x_gradient":
+            return InputXGradient(self.model)
+        elif self.method == "guided_backprop":
+            return GuidedBackprop(self.model)
+
+    def _model_predict(self, inputs):
+        """
+        Wrapper for model prediction to ensure compatibility with SHAP and LIME.
+        Converts PyTorch tensors to numpy arrays for compatibility.
+        Ensures output includes probabilities for both classes in binary classification.
+        """
+        self.model.eval()  # Ensure the model is in evaluation mode
+        with torch.no_grad():
+            inputs = torch.tensor(inputs, dtype=torch.float32)
+            outputs = self.model(inputs).numpy()  # Get model outputs as numpy array
+
+        if self.task == "classification":
+            # Ensure binary classification outputs both probabilities: [P(y=0), P(y=1)]
+            return np.hstack([1 - outputs, outputs])  # Convert single probability to two-class format
+        return outputs.squeeze()
+
+    def explain(self, inputs, baseline=None, target=0, instance_idx=None):
+        """
+        Explain the predictions for the given inputs.
+        :param inputs: Input tensor or array for Captum/SHAP/LIME.
+        :param baseline: Baseline tensor for Captum methods requiring baselines.
+        :param target: Target class index for Captum methods.
+        :param instance_idx: Index of the instance to explain (for LIME and SHAP).
+        :return: DataFrame with feature names, input values, and attributions.
+        """
+        if isinstance(inputs, torch.Tensor):
+            inputs_np = inputs.detach().numpy()  # Convert PyTorch tensor to NumPy array
+        else:
+            inputs_np = inputs
+
+        if self.method in ["integrated_gradients", "gradient_shap"]:
+            if instance_idx is not None:
+                inputs = inputs[instance_idx:instance_idx + 1]
+
+            if baseline is None:
+                if isinstance(inputs, torch.Tensor):
+                    pass
+                else:
+                    inputs = torch.tensor(inputs, dtype=torch.float32)
+                baseline = torch.zeros_like(inputs)  # Default baseline
+            attributions = self.explainer.attribute(inputs, baselines=baseline, target=target)
+        elif self.method in ["deep_lift", "saliency", "input_x_gradient", "guided_backprop"]:
+            if instance_idx is not None:
+                inputs = inputs[instance_idx:instance_idx + 1]
+            if not isinstance(inputs, torch.Tensor):
+                inputs = torch.tensor(inputs)
+            attributions = self.explainer.attribute(inputs, target=target)
+        elif self.method == "shap_kernel":
+            if instance_idx is not None:
+                inputs_np = inputs_np[instance_idx:instance_idx + 1]
+            shap_values = self.explainer.shap_values(inputs_np)
+            attributions = shap_values[0]  # For binary classification, use first class
+        elif self.method == "shap_deep":
+            if instance_idx is not None:
+                inputs = inputs[instance_idx:instance_idx + 1]
+            shap_values = self.explainer.shap_values(inputs)
+            attributions = shap_values[0]  # For binary classification
+        elif self.method == "lime":
+            if instance_idx is None :
+                instance_idx = 0
+            explanation = self.explainer.explain_instance(
+                inputs_np[instance_idx], self._model_predict
+            )
+            attributions = explanation.as_list()
+            return self._map_binned_to_original(attributions, inputs_np[instance_idx])
+
+        # Convert attributions to a DataFrame
+        attributions = attributions.detach().numpy() if isinstance(attributions, torch.Tensor) else attributions
         
+        if instance_idx is None :
+            instance_idx = 0
+
+        results = pd.DataFrame({
+            "Feature": self.feature_names,
+            "Value": inputs_np[instance_idx],
+            "Attribution": attributions[0] if len(attributions.shape) > 1 else attributions
+        }).sort_values(by="Attribution", key=abs, ascending=False)
+
+        return results
+
+    def _map_binned_to_original(self, attributions, x_instance):
+        """
+        Map the binned features to the original features and return a DataFrame.
+        """
+        original_attributions = []
+        
+        for feature, attribution in attributions:
+            # Extract the original feature name by removing binning conditions
+            if "<=" in feature or "<" in feature or ">" in feature:
+                original_feature = next(
+                    (word.strip() for word in feature.split() if word.strip() in self.feature_names),
+                    feature  # Fall back to the full feature name if no match
+                )
+            else:
+                original_feature = feature
+
+            # Get the corresponding feature value from the instance
+            feature_index = self.feature_names.index(original_feature)
+            feature_value = x_instance[feature_index]
+
+            # Append the original feature name, feature value, and attribution
+            original_attributions.append((original_feature, feature_value, attribution))
+        
+        # Convert to a DataFrame for better readability
+        attribution_df = pd.DataFrame(
+            original_attributions,
+            columns=["Feature", "Value", "Attribution"]
+        )
+        attribution_df = attribution_df.sort_values(by="Attribution", key=abs, ascending=False)
+        return attribution_df
+
+class DlBacktraceTabularExplainer:
+    def __init__(self, model, feature_names, task="binary-classification", scaler=1, thresholding=0.5, method="default", X_train=None):
+        """
+        Initialize the BacktraceExplainer with model, framework detection, task type, and other evaluation parameters.
+        :param model: Trained model (TensorFlow/Keras or PyTorch model)
+        :param task: Type of task - "binary-classification", "multi-class classification", "segmentation", etc.
+        :param method: The mode of evaluation - "default" or "contrastive"
+        :param scaler: Total / Starting Relevance at the Last Layer (Integer, Default: 1)
+        :param thresholding: Threshold for segmentation tasks (Default: 0.5)
+        :param X_train: Training data used for the model (for some explainers)
+        """
+        self.model = model
+        self.task = task
+        self.mode = method
         self.scaler = scaler
         self.thresholding = thresholding
-        self.subset_samples = subset_samples
-        self.subset_number = subset_number
+        self.feature_names = feature_names
 
-        # Set default metrics if none provided
-        self.metrics = metrics if metrics else [
-            'faithfulness', 'infidelity', 'sensitivity',
-            'comprehensiveness', 'sufficiency', 'monotonicity',
-            'complexity', 'sparseness'
-        ]
-
-        self.start_idx = start_idx
-        self.end_idx = end_idx if end_idx is not None else len(self.X_test)
-
-        # Determine if we're using a sklearn model or TF/PyTorch
-        # For SHAP/LIME: sklearn-like model
-        # For torch/tensorflow/backtrace: deep learning model
-        if self.explainer_name in ['shap', 'lime']:
-            self.is_sklearn = True
+        if self.mode == "default":
+            self.mode = "default"
+            self.cmode = None
+        elif self.mode == "contrast-positive":
+            self.mode = "contrast"
+            self.cmode = "Positive"
+        elif self.mode == "contrast-negative":
+            self.mode = "contrast"
+            self.cmode = "Negative"
+        elif self.mode == "contrast":
+            self.mode = "contrast"
+            self.cmode = "Positive"  
         else:
-            self.is_sklearn = False
+            self.mode = "default"
 
-        # Initialize explainer
-        self.explainer = self._initialize_explainer()
-
-    def _initialize_explainer(self):
-        # Determine mode for LIME or others based on the task
-        if "regression" in self.task:
-            explainer_mode = "regression"
-        elif "classification" in self.task:
-            explainer_mode = "classification"
+        # Automatically detect whether the model is TensorFlow or PyTorch
+        if isinstance(self.model, tf.keras.Model):  # TensorFlow model
+            self.framework = "tensorflow"
+            self.backtrace = TFBacktrace(model=model)
+            self.inp_layer = self.backtrace.model_resource["inputs"][0]
+        elif isinstance(self.model, torch.nn.Module):  # PyTorch model
+            self.framework = "pytorch"
+            self.backtrace = TorchBacktrace(model=model)
+            self.inp_layer = 'identity'
         else:
-            raise ValueError("Task must be 'binary-classification', 'multiclass-classification', or 'regression'.")
+            raise ValueError("Unsupported model type. Only TensorFlow and PyTorch models are supported.")
 
-        if self.explainer_name == 'shap':
-            return SHAPExplainer(model=self.model, features=pd.Series(self.features), task=self.task, X_train=self.X_train,subset_samples=self.subset_samples,subset_number=self.subset_number)
-        elif self.explainer_name == 'lime':
-            return LIMEExplainer(model=self.model, features=self.features, task=explainer_mode, X_train=self.X_train)
-        elif self.explainer_name == 'torch':
-            # Ensure PyTorch model
-            if not isinstance(self.model, torch.nn.Module):
-                raise ValueError("For 'torch' explainer, model must be a PyTorch model.")
-            return TorchTabularExplainer(model=self.model, task=self.task, method=self.method, feature_names=self.features, X_train=self.X_train)
-        elif self.explainer_name == 'tensorflow':
-            # Ensure TensorFlow model
-            if not isinstance(self.model, tf.keras.Model):
-                raise ValueError("For 'tensorflow' explainer, model must be a TensorFlow/Keras model.")
-            return TFTabularExplainer(model=self.model, task=self.task, method=self.method, feature_names=self.features, X_train=self.X_train)
-        elif self.explainer_name == 'backtrace':
-            # Backtrace works with TF/PyTorch
-            if not (isinstance(self.model, tf.keras.Model) or isinstance(self.model, torch.nn.Module)):
-                raise ValueError("For 'backtrace' explainer, model must be a TF/Keras or PyTorch model.")
-            return DlBacktraceTabularExplainer(model=self.model, task=self.task, method=self.method, scaler=self.scaler,
-                                      thresholding=self.thresholding, feature_names=self.features)
+    def _prepare_data(self, test_data):
+        """
+        Ensure the input data is in the correct format for evaluation.
+        """
+        if isinstance(test_data, np.ndarray):
+            return test_data
+        elif isinstance(test_data, pd.DataFrame):
+            return test_data.values
+        elif isinstance(test_data, torch.Tensor):
+                return test_data.numpy()
         else:
-            raise ValueError("Unsupported explainer name. Choose from 'shap', 'lime', 'torch', 'tensorflow', 'backtrace'.")
+            raise ValueError("Unsupported data format. Input must be a numpy array or pandas DataFrame.")
 
-    def _predict_proba_sklearn(self, X):
+    def explain(self, test_data, instance_idx=0):
         """
-        For sklearn classification models, returns class probabilities.
+        Use DLBacktrace to explain a specific instance from the test data.
+        :param test_data: Test dataset (numpy array or pandas DataFrame)
+        :param instance_idx: Index of the instance to explain
+        :return: DataFrame of feature relevance for the explained instance
         """
-        if hasattr(self.model, 'predict_proba'):
-            return self.model.predict_proba(X)
-        else:
-            raise ValueError("Model does not have predict_proba. For classification tasks, this is required.")
+        test_data = self._prepare_data(test_data)
+        instance = test_data[instance_idx:instance_idx+1]
 
-    def _predict_sklearn(self, X):
-        """
-        Predict using sklearn model:
-        - Regression: return numeric predictions.
-        - Classification: return probability of predicted class.
-        """
-        if "regression" in self.task:
-            return self.model.predict(X).flatten()
-        else:
-            proba = self._predict_proba_sklearn(X)
-            predicted_classes = np.argmax(proba, axis=1)
-            return proba[np.arange(len(proba)), predicted_classes]
+        if self.framework == "pytorch":
+            if not isinstance(test_data, torch.Tensor):
+                instance = torch.tensor(instance)
 
-    def _predict_tf(self, X):
-        """
-        Predict using a TensorFlow/Keras model.
+        # Step 1: Get the layer outputs using the Backtrace model
+        layer_outputs = self.backtrace.predict(instance)
         
-        Assumptions:
-        - Regression: model outputs a single numeric value per instance.
-        - Classification: 
-          - For binary, model might output a single sigmoid probability for the positive class, convert to [1-p, p].
-          - For multi-class, model should output probabilities directly. If logits are returned, apply softmax.
+        # Step 2: Get the layer-wise relevance using DLBacktrace
+        relevance = self.backtrace.eval(
+            layer_outputs,
+            mode=self.mode,
+            scaler=self.scaler,
+            thresholding=self.thresholding,
+            task=self.task
+        )
+        # Step 3: Format the relevance output as a DataFrame, focusing on the input layer's relevance
+        return self._format_relevance(instance, relevance[self.inp_layer][self.cmode])
 
-        Adjust as needed depending on your model's last layer.
+    def _format_relevance(self, instance, relevance):
         """
-        outputs = self.model.predict(X)
-        if "regression" in self.task:
-            return outputs.flatten()
-        else:
-            # Classification
-            if outputs.ndim == 1:
-                # Binary classification with single output probability
-                outputs = outputs.reshape(-1, 1)
-                outputs = np.hstack([1 - outputs, outputs])
-            
-            # If model returns logits, apply softmax:
-            # outputs = scipy.special.softmax(outputs, axis=1)  # Uncomment if needed
-
-            predicted_classes = np.argmax(outputs, axis=1)
-            return outputs[np.arange(len(outputs)), predicted_classes]
-
-    def _predict_torch(self, X):
+        Format the relevance output into a DataFrame for better readability.
         """
-        Predict using a PyTorch model.
-        
-        - Convert X to a torch tensor.
-        - Model might return logits or probabilities.
-        - If regression: return numeric predictions.
-        - If classification:
-          - If single output (binary), apply sigmoid and convert to [1-p, p].
-          - If multi-class logits, apply softmax to get probabilities.
+        # Flatten the relevance and instance values to match feature dimensions
+        relevance = relevance.flatten()
+        instance = instance.flatten()
 
-        Adjust as needed depending on your model's last layer.
-        """
-        self.model.eval()
-        with torch.no_grad():
-            inputs = torch.tensor(X, dtype=torch.float32)
-            outputs = self.model(inputs).cpu().numpy()
-        
-        if "regression" in self.task:
-            return outputs.flatten()
-        else:
-            # Classification
-            # If outputs are logits, apply softmax:
-            # from scipy.special import softmax
-            # outputs = softmax(outputs, axis=1)  # Uncomment if needed
+        # Prepare DataFrame for feature relevance
+        relevance_df = pd.DataFrame({
+            'Feature': self.feature_names,
+            'Value': instance,
+            'Attribution': relevance
+        })
 
-            if outputs.shape[1] == 1:
-                # Binary classification: single output probability
-                p = outputs.ravel()  # If these are already probabilities
-                # If these are logits, apply sigmoid:
-                # p = 1/(1+np.exp(-p))
-                outputs = np.column_stack([1 - p, p])
-            
-            predicted_classes = np.argmax(outputs, axis=1)
-            return outputs[np.arange(len(outputs)), predicted_classes]
-
-    def _predict_backtrace(self, X):
-        """
-        Backtrace uses either a TF or PyTorch model. 
-        Detect and route to the appropriate prediction function.
-        """
-        if isinstance(self.model, tf.keras.Model):
-            return self._predict_tf(X)
-        elif isinstance(self.model, torch.nn.Module):
-            return self._predict_torch(X)
-        else:
-            raise ValueError("Backtrace explainer requires a TF or Torch model.")
-
-    def _predict(self, X):
-        """
-        Unified predict function that routes to the correct prediction logic.
-        """
-        if self.is_sklearn:
-            return self._predict_sklearn(X)
-        else:
-            # Torch, TF, or Backtrace
-            if self.explainer_name == 'torch':
-                return self._predict_torch(X)
-            elif self.explainer_name == 'tensorflow':
-                return self._predict_tf(X)
-            elif self.explainer_name == 'backtrace':
-                return self._predict_backtrace(X)
-
-    def _get_explanation(self, start_idx, end_idx):
-        attributions_list = []
-        if self.explainer_name == 'torch':
-            X_test_tensor = torch.tensor(self.X_test, dtype=torch.float32)
-            for i in range(start_idx, end_idx):
-                instance_explanation = self.explainer.explain(X_test_tensor, instance_idx=i)
-                attributions_list.append(instance_explanation)
-        else:
-            for i in range(start_idx, end_idx):
-                instance_explanation = self.explainer.explain(self.X_test, instance_idx=i)
-                attributions_list.append(instance_explanation)
-        return attributions_list
-
-    def _generate_noise(self, shape, epsilon=1e-2):
-        return np.random.normal(0, epsilon, size=shape)
-
-    def _infidelity(self, attributions_list, epsilon=1e-2):
-        infidelity_scores = []
-        for i in range(self.start_idx, self.end_idx):
-            x = self.X_test[i:i+1]
-            noise = self._generate_noise(x.shape, epsilon=epsilon)[0]
-            g_x = attributions_list[i - self.start_idx]['Attribution'].values
-            
-            f_x = self._predict(x)[0]
-            f_x_pert = self._predict((x + noise))[0]
-
-            predicted_impact = np.dot(g_x, noise)
-            actual_impact = f_x_pert - f_x
-
-            infidelity_scores.append((predicted_impact - actual_impact)**2)
-        return np.mean(infidelity_scores)
-
-    def _sensitivity(self, attributions_list, epsilon=1e-2):
-        sensitivity_scores = []
-        for i in range(self.start_idx, self.end_idx):
-            x = self.X_test[i:i+1]
-            noise = self._generate_noise(x.shape, epsilon=epsilon)
-            perturbed_x = (x + noise).astype(x.dtype)
-            old_attr = attributions_list[i - self.start_idx]['Attribution'].values
-
-            new_explanation = self.explainer.explain(perturbed_x, instance_idx=0)
-            new_attr = new_explanation['Attribution'].values
-
-            sensitivity_scores.append(np.linalg.norm(old_attr - new_attr))
-        return np.mean(sensitivity_scores)
-
-    def _comprehensiveness(self, attributions_list, k=5):
-        comprehensiveness_scores = []
-        for i in range(self.start_idx, self.end_idx):
-            attrs = attributions_list[i - self.start_idx]['Attribution'].values
-            top_k_indices = np.argsort(np.abs(attrs))[-k:]
-
-            x = self.X_test[i].copy()
-            x_masked = x.copy()
-            x_masked[top_k_indices] = 0
-
-            f_x = self._predict(x.reshape(1, -1))[0]
-            f_masked = self._predict(x_masked.reshape(1, -1))[0]
-            comprehensiveness_scores.append(f_x - f_masked)
-        return np.mean(comprehensiveness_scores)
-
-    def _sufficiency(self, attributions_list, k=5):
-        sufficiency_scores = []
-        for i in range(self.start_idx, self.end_idx):
-            attrs = attributions_list[i - self.start_idx]['Attribution'].values
-            top_k_indices = np.argsort(np.abs(attrs))[-k:]
-
-            x = self.X_test[i]
-            x_focused = np.zeros_like(x)
-            x_focused[top_k_indices] = x[top_k_indices]
-
-            f_x = self._predict(x.reshape(1, -1))[0]
-            f_focused = self._predict(x_focused.reshape(1, -1))[0]
-            sufficiency_scores.append(f_focused - f_x)
-        return np.mean(sufficiency_scores)
-
-    def _monotonicity(self, attributions_list):
-        monotonicity_scores = []
-        for attributions in attributions_list:
-            attrs = attributions['Attribution'].values
-            monotonicity_scores.append(np.all(np.diff(attrs) <= 0))
-        return np.mean(monotonicity_scores)
-
-    def _complexity(self, attributions_list):
-        return np.mean([np.sum(attr['Attribution'].values != 0) for attr in attributions_list])
-
-    def _sparseness(self, attributions_list):
-        total_attrs = len(attributions_list) * len(self.features)
-        non_zero = np.sum([np.sum(attr['Attribution'].values != 0) for attr in attributions_list])
-        return 1 - (non_zero / total_attrs)
-
-    def _faithfulness_correlation(self, attributions_list):
-        faithfulness_scores = []
-        for i in range(self.start_idx, self.end_idx):
-            f_x = self._predict(self.X_test[i:i+1])[0]
-            attribution_values = attributions_list[i - self.start_idx]['Attribution'].values
-
-            for j, a_j in enumerate(attribution_values):
-                x_pert = self.X_test[i].copy()
-                x_pert[j] = 0
-                f_pert = self._predict(x_pert.reshape(1, -1))[0]
-                change = f_x - f_pert
-                faithfulness_scores.append((change, a_j))
-
-        if len(faithfulness_scores) < 2:
-            return np.nan
-
-        changes, attrs = zip(*faithfulness_scores)
-        corr_matrix = np.corrcoef(changes, attrs)
-        return corr_matrix[0, 1]
-
-    def calculate_metrics(self):
-        attributions_list = self._get_explanation(self.start_idx, self.end_idx)
-        results = {}
-
-        if 'faithfulness' in self.metrics:
-            results['faithfulness'] = self._faithfulness_correlation(attributions_list)
-            print("Computed faithfulness")
-        if 'infidelity' in self.metrics:
-            results['infidelity'] = self._infidelity(attributions_list)
-            print("Computed infidelity")
-        if 'sensitivity' in self.metrics:
-            results['sensitivity'] = self._sensitivity(attributions_list)
-            print("Computed sensitivity")
-        if 'comprehensiveness' in self.metrics:
-            results['comprehensiveness'] = self._comprehensiveness(attributions_list)
-            print("Computed comprehensiveness")
-        if 'sufficiency' in self.metrics:
-            results['sufficiency'] = self._sufficiency(attributions_list)
-            print("Computed sufficiency")
-        if 'monotonicity' in self.metrics:
-            results['monotonicity'] = self._monotonicity(attributions_list)
-            print("Computed monotonicity")
-        if 'complexity' in self.metrics:
-            results['complexity'] = self._complexity(attributions_list)
-            print("Computed complexity")
-        if 'sparseness' in self.metrics:
-            results['sparseness'] = self._sparseness(attributions_list)
-            print("Computed sparseness")
-
-        return pd.DataFrame(results, index=[0])
+        # Sort by relevance to understand the most influential features
+        relevance_df = relevance_df.sort_values(by="Attribution", key=abs, ascending=False)
+        return relevance_df
