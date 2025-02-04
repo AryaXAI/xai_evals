@@ -35,7 +35,17 @@ To install **`xai_evals`**, you can use `pip`. First, clone the repository or do
 pip install xai_evals
 ```
 
-## Usage
+## Example Notebooks : 
+
+### Tensorflow-Keras : 
+
+| Name        | Dataset        | Link                          |
+|-------------|-------------|-------------------------------|
+| Tabualar ML Models Illustration and Evaluation Metrics | IRIS Dataset | [Colab Link](https://colab.research.google.com/drive/1UoT5Gx5d_L1KQmiirGUyyE1b9ajayO3L?usp=sharing) |
+| Tabular Deep Learning Model Illustration and Evaluation Metrics | Lending Club | [Colab Link](https://colab.research.google.com/drive/17vuRt4D7ph6ZnAbrWMJ2aRum2mk14Tc6?usp=sharing)  |
+| Image Deep Learning Model Illustration and Evaluation Metrics | CIFAR10 | [Colab Link](https://colab.research.google.com/drive/1DNUMT6CNx2VGHsK8qhl3dEEtoN3eA7ar?usp=sharing) |
+
+## Usage : Machine Learning Models
 
 Supported Machine Learning Models for `SHAPExplainer` and `LIMEExplainer` class is as follows : 
 
@@ -131,6 +141,7 @@ For **LIMEExplainer and SHAPExplainer Class** we have several attributes :
 | subset_samples (Only for SHAP) | If we want to use k-means based sampling to use a subset for SHAP Explainer | True/False |
 | subset_number (Only for SHAP)| Number of samples to sample if subset_samples is True | int |
 
+## Usage : Deep Learning Models
 
 ### Torch Tabular Explainer
 
