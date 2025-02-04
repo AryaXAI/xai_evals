@@ -1,196 +1,89 @@
+import os
+import gc
+import pickle
+import torch
+import quantus
 import pandas as pd
 import numpy as np
-import torch
 import tensorflow as tf
 from xai_evals.explainer import LIMEExplainer, SHAPExplainer, DlBacktraceTabularExplainer, TorchTabularExplainer, TFTabularExplainer
 from sklearn.base import is_regressor, is_classifier
 import tensorflow as tf
 from tf_explain.core import IntegratedGradients, VanillaGradients, GradCAM, SmoothGrad, OcclusionSensitivity
-import numpy as np
+import numpy
 import quantus
 from tensorflow.keras.utils import to_categorical
 from dl_backtrace.tf_backtrace import Backtrace as TFBacktrace
 from dl_backtrace.pytorch_backtrace import Backtrace as TorchBacktrace
 from xai_evals.utils import backtrace_quantus
-
+from tqdm import tqdm
 
 class ExplanationMetricsImage:
     """
-    A wrapper class to evaluate explanations using Quantus metrics, supporting both PyTorch and TensorFlow models.
+    A wrapper class to evaluate explanations using Quantus metrics, supporting PyTorch, TensorFlow, and Backtrace models.
     """
 
-    def __init__(self, model, data_loader, framework="torch", device=None, num_classes=10):
+    def __init__(self, model, data_loader, framework="torch", device=None, num_classes=10, cache_dir="cache"):
         """
-        Initializes the wrapper with the model, dataset, and framework.
+        Initializes the evaluation class.
 
         Args:
             model (torch.nn.Module or tf.keras.Model): The trained model.
             data_loader (DataLoader or tf.data.Dataset): DataLoader for test data.
-            framework (str): Framework of the model ('torch' or 'tensorflow').
+            framework (str): Framework of the model ('torch', 'tensorflow', or 'backtrace').
             device (torch.device, optional): Device to perform computations (for PyTorch models).
+            cache_dir (str): Directory to store intermediate batch results.
         """
         self.model = model
         self.data_loader = data_loader
         self.framework = framework.lower()
         self.device = device
         self.num_classes = num_classes
+        self.cache_dir = cache_dir
 
         if self.framework == "torch":
             self.model.eval()
-            
-        # Predefined configuration for metrics
+
+        os.makedirs(self.cache_dir, exist_ok=True)  # Ensure cache directory exists
+
+        # Define available Quantus metrics
         self.metrics_config = {
-            "FaithfulnessCorrelation": quantus.FaithfulnessCorrelation(subset_size=16),
-            "MaxSensitivity": quantus.MaxSensitivity(disable_warnings=True),
-            "MPRT": quantus.MPRT(disable_warnings=True),
-            "SmoothMPRT": quantus.SmoothMPRT(disable_warnings=True),
-            "AvgSensitivity": quantus.AvgSensitivity(disable_warnings=True),
-            "FaithfulnessEstimate": quantus.FaithfulnessEstimate(perturb_baseline="black", normalise=True),
+            "FaithfulnessCorrelation": quantus.FaithfulnessCorrelation(aggregate_func=None,subset_size=16,disable_warnings=True),
+            "MaxSensitivity": quantus.MaxSensitivity(aggregate_func=None,disable_warnings=True),
+            "MPRT": quantus.MPRT(aggregate_func=None,disable_warnings=True),
+            "SmoothMPRT": quantus.SmoothMPRT(aggregate_func=None,disable_warnings=True),
+            "AvgSensitivity": quantus.AvgSensitivity(aggregate_func=None,disable_warnings=True),
+            "FaithfulnessEstimate": quantus.FaithfulnessEstimate(perturb_baseline="black", normalise=True,aggregate_func=None,disable_warnings=True),
         }
- 
-        # Predefined configuration for explanation methods
+
+        # Define supported XAI methods
+        self.xai_methods_config = self._initialize_xai_methods()
+
+    def _initialize_xai_methods(self):
+        """Defines supported XAI methods for PyTorch, TensorFlow, and Backtrace."""
         if self.framework == "torch":
-            self.xai_methods_config = {
+            return {
                 "IntegratedGradients": {"xai_lib": "captum", "method": "IntegratedGradients"},
                 "Saliency": {"xai_lib": "captum", "method": "Saliency"},
                 "DeepLift": {"xai_lib": "captum", "method": "DeepLift"},
                 "GradientShap": {"xai_lib": "captum", "method": "GradientShap"},
                 "Occlusion": {"xai_lib": "captum", "method": "Occlusion"},
-                'DeepLiftShap': {"xai_lib": "captum", "method": "DeepLiftShap"},
-                'InputXGradient': {"xai_lib": "captum", "method": "InputXGradient"},
-                'Saliency': {"xai_lib": "captum", "method": "Saliency"},
-                'FeatureAblation': {"xai_lib": "captum", "method": "FeatureAblation"},
-                'Deconvolution': {"xai_lib": "captum", "method": "Deconvolution"},
-                'FeaturePermutation': {"xai_lib": "captum", "method": "FeaturePermutation"},
-                'Lime': {"xai_lib": "captum", "method": "Lime"},
-                'KernelShap': {"xai_lib": "captum", "method": "KernelShap"},
-                'LRP': {"xai_lib": "captum", "method": "LRP"},
-                'Gradient': {"xai_lib": "captum", "method": "Gradient"},
-                'LayerGradCam': {"xai_lib": "captum", "method": "LayerGradCam"},
-                'GuidedGradCam': {"xai_lib": "captum", "method": "GuidedGradCam"},
-                'LayerConductance': {"xai_lib": "captum", "method": "LayerConductance"},
-                'LayerActivation': {"xai_lib": "captum", "method": "LayerActivation"},
-                'InternalInfluence': {"xai_lib": "captum", "method": "InternalInfluence"},
-                'LayerGradientXActivation': {"xai_lib": "captum", "method": "LayerGradientXActivation"},
-                'Control Var. Sobel Filter': {"xai_lib": "captum", "method": "Control Var. Sobel Filter"},
-                'Control Var. Constant': {"xai_lib": "captum", "method": "Control Var. Constant"},
-                'Control Var. Random Uniform': {"xai_lib": "captum", "method": "Control Var. Random Uniform"},
+                "Lime": {"xai_lib": "captum", "method": "Lime"},
+                "KernelShap": {"xai_lib": "captum", "method": "KernelShap"},
+                "GuidedGradCam": {"xai_lib": "captum", "method": "GuidedGradCam"},
             }
         elif self.framework == "tensorflow":
-            self.xai_methods_config = {
+            return {
                 "VanillaGradients": {"xai_lib": "tf-explain", "method": "VanillaGradients"},
                 "GradCAM": {"xai_lib": "tf-explain", "method": "GradCAM"},
-                "GradientsInput": {"xai_lib": "tf-explain", "method": "VanillaGradients"},
                 "IntegratedGradients": {"xai_lib": "tf-explain", "method": "IntegratedGradients"},
                 "OcclusionSensitivity": {"xai_lib": "tf-explain", "method": "OcclusionSensitivity"},
                 "SmoothGrad": {"xai_lib": "tf-explain", "method": "SmoothGrad"},
             }
-        elif self.framework == "backtrace":
-            print("Backtrace Framework Explaination")
+        elif self.framework == "dlbacktrace" or self.framework == "backtrace":
+            return {}  # No predefined methods, as Backtrace is handled separately.
         else:
-            raise ValueError(f"Unsupported framework: {framework}")
-
-    def evaluate(self, start_idx, end_idx, metric_names, xai_method_name,channel_first=True,softmax=False):
-        """
-        Evaluates a list of Quantus metrics on a batch of samples.
-
-        Args:
-            start_idx (int): Start index of the batch from the data loader.
-            end_idx (int): End index of the batch from the data loader.
-            metric_names (list): List of metric names to evaluate.
-            xai_method_name (str): Name of the XAI method.
-
-        Returns:
-            dict: Aggregated scores for each metric.
-        """
-        # Prepare batch data
-        self.softmax = softmax
-        self.channel_first = channel_first
-        x_batch, y_batch = self._prepare_data(start_idx, end_idx)
-
-        if self.framework == "backtrace":
-            if isinstance(self.model, tf.keras.Model):  # TensorFlow model
-                self.backtrace_intitial = TFBacktrace(model=self.model)
-            elif isinstance(self.model, torch.nn.Module):  # PyTorch model
-                self.backtrace_intitial = TorchBacktrace(model=self.model)
-
-        # Wrapper to integrate Backtrace with Quantus
-            
-            if xai_method_name == "default":
-                mode = "default"
-                cmode = None
-            elif xai_method_name == "contrast-positive":
-                mode = "contrast"
-                cmode = "Positive"
-            elif xai_method_name == "contrast-negative":
-                mode = "contrast"
-                cmode = "Negative"
-            elif xai_method_name == "contrast":
-                mode = "contrast"
-                cmode = "Positive"  
-            else:
-                mode = "default"
-            
-            metrics = {name: self.metrics_config[name] for name in metric_names}
-            method_explanation = { 'Backtrace': backtrace_quantus }
-
-            # Compute scores for each metric
-            aggregated_scores = {}
-            for metric_name, metric in metrics.items():
-                raw_scores = metric(
-                    model=self.model,
-                    x_batch=x_batch,
-                    y_batch=y_batch,
-                    device=self.device,
-                    explain_func=backtrace_quantus,
-                    explain_func_kwargs={'backtrace': self.backtrace_intitial,'mode':mode, 'cmode':cmode},
-                    channel_first=self.channel_first,
-                    softmax=self.softmax
-                )
-                if metric_name == "Continuity":
-                    aggregated_scores[metric_name] = self._aggregate_continuity_scores(raw_scores)
-                elif metric_name == "MPRT" or metric_name == "SmoothMPRT":
-                    aggregated_scores[metric_name] = self._aggregate_MPRT_scores(raw_scores)
-                else:
-                    aggregated_scores[metric_name] = (
-                        np.nanmean(raw_scores) if isinstance(raw_scores, list) else raw_scores
-                    )
-            return aggregated_scores
-
-        else:
-            # Ensure the selected XAI method and metrics exist
-            if xai_method_name not in self.xai_methods_config:
-                raise ValueError(f"XAI method '{xai_method_name}' is not configured.")
-            if not all(metric in self.metrics_config for metric in metric_names):
-                raise ValueError("One or more metrics are not configured.")
-
-            # Prepare XAI method and metric instances
-            explain_func_kwargs = self.xai_methods_config[xai_method_name]
-            metrics = {name: self.metrics_config[name] for name in metric_names}
-
-            # Compute scores for each metric
-            aggregated_scores = {}
-            for metric_name, metric in metrics.items():
-                raw_scores = metric(
-                    model=self.model,
-                    x_batch=x_batch,
-                    y_batch=y_batch,
-                    device=self.device,
-                    explain_func=quantus.explain,
-                    explain_func_kwargs=explain_func_kwargs,
-                    channel_first=self.channel_first,
-                    softmax=self.softmax
-                )
-                if metric_name == "Continuity":
-                    aggregated_scores[metric_name] = self._aggregate_continuity_scores(raw_scores)
-                elif metric_name == "MPRT" or metric_name == "SmoothMPRT":
-                    aggregated_scores[metric_name] = self._aggregate_MPRT_scores(raw_scores)
-                else:
-                    aggregated_scores[metric_name] = (
-                        np.nanmean(raw_scores) if isinstance(raw_scores, list) else raw_scores
-                    )
-
-            return aggregated_scores
+            raise ValueError(f"Unsupported framework: {self.framework}")
 
     def _prepare_data(self, start_idx, end_idx):
         """
@@ -276,8 +169,48 @@ class ExplanationMetricsImage:
         # Case 5: Invalid Data Type
         else:
             raise ValueError("Invalid data type. Expected DataLoader, Dataset, or Tuple of arrays.")
-
+        gc.collect()
         return x_batch, y_batch
+
+    def _evaluate_backtrace(self, model, metric_names, xai_method_name, x_batch, y_batch, batch_idx):
+        """Handles batchwise evaluation for Backtrace."""
+        self.evaluate_model = model
+        if isinstance(self.model, tf.keras.Model):
+            backtrace_instance = TFBacktrace(model=self.evaluate_model)
+        elif isinstance(self.model, torch.nn.Module):
+            backtrace_instance = TorchBacktrace(model=self.evaluate_model)
+        else:
+            raise ValueError("Backtrace only supports TensorFlow and PyTorch models.")
+
+        mode, cmode = {
+            "default": ("default", None),
+            "contrast-positive": ("contrast", "Positive"),
+            "contrast-negative": ("contrast", "Negative"),
+            "contrast": ("contrast", "Positive"),
+        }.get(xai_method_name, ("default", None))
+
+        batch_results = {}
+        for metric_name in metric_names:
+            metric = self.metrics_config[metric_name]
+            raw_scores = metric(
+                model=self.evaluate_model,
+                x_batch=x_batch,
+                y_batch=y_batch,
+                device=self.device,
+                explain_func=backtrace_quantus,
+                explain_func_kwargs={"backtrace": backtrace_instance, "mode": mode, "cmode": cmode},
+                channel_first=self.channel_first,
+                softmax=self.softmax
+            )
+            del metric
+            if metric_name == "Continuity":
+                batch_results[metric_name] = self._aggregate_continuity_scores(raw_scores)
+            elif metric_name == "MPRT" or metric_name == "SmoothMPRT":
+                batch_results[metric_name] = self._aggregate_MPRT_scores(raw_scores)
+            else:
+                batch_results[metric_name] = (np.nanmean([v for v in raw_scores if not np.isnan(v) and not np.isinf(v)]) if isinstance(raw_scores, list) else raw_scores)
+
+        return batch_results
 
     def _aggregate_continuity_scores(self, scores):
         """
@@ -292,17 +225,161 @@ class ExplanationMetricsImage:
         all_values = []
         for key, value in scores.items():
             if isinstance(value, list):
-                all_values.extend(value)
+                all_values.extend([v for v in value if not np.isnan(v) and not np.isinf(v)])
             elif isinstance(value, dict):  # Nested dictionary case
                 for sub_key, sub_value in value.items():
                     if isinstance(sub_value, list):
-                        all_values.extend(sub_value)
+                        all_values.extend([v for v in sub_value if not np.isnan(v) and not np.isinf(v)])
+                    else:
+                        all_values.extend([v for v in sub_value if not np.isnan(v) and not np.isinf(v)])
+
         return np.nanmean(all_values)
+
     def _aggregate_MPRT_scores(self, scores):
         mprt_dict = {}
         for key, value in scores.items():
             mprt_dict[key] = np.nanmean(np.array(value))
         return mprt_dict
+
+    def _aggregate_cached_results(self, cache_files):
+        """Aggregates metric results from cached batch files and deletes them."""
+        aggregated_scores = {}
+        nan_inf_value_count = 0
+
+        for cache_file in cache_files:
+            with open(cache_file, "rb") as f:
+                batch_results = pickle.load(f)
+
+            for metric_name, score in batch_results.items():
+                if isinstance(score, dict):
+                    for sub_key, sub_value in score.items():
+                        name_key = metric_name + "_" + sub_key
+                        if np.isfinite(sub_value):
+                            if name_key not in aggregated_scores:
+                                aggregated_scores[name_key] = 0.0
+                            else:
+                                aggregated_scores[name_key] += sub_value
+                        else:
+                            nan_inf_value_count+=1
+                else:
+                    if np.isfinite(score):
+                        if metric_name not in aggregated_scores:
+                            aggregated_scores[metric_name] = 0.0
+                        aggregated_scores[metric_name] += score
+                    else:
+                        nan_inf_value_count +=1
+
+        num_batches = len(cache_files)-nan_inf_value_count
+        for metric_name in aggregated_scores:
+            aggregated_scores[metric_name] /= num_batches
+
+        aggregated_scores["num_batches"] = num_batches
+
+        # Delete cache files
+        for cache_file in cache_files:
+            os.remove(cache_file)
+
+        return aggregated_scores
+
+    def _compute_metrics(self, model, metrics, x_batch, y_batch, explain_func_kwargs,quantus_bs):
+        """Computes Quantus metrics for a batch."""
+        batch_results = {}
+        self.quantus_model = self.model
+        self.bs = quantus_bs
+        # Apply `torch.no_grad()` only for PyTorch models
+        if self.framework == "torch":
+            with torch.no_grad():
+                for metric_name, metric in metrics.items():
+                    raw_scores = metric(
+                        model=self.quantus_model,
+                        x_batch=x_batch,
+                        y_batch=y_batch,
+                        device=self.device,
+                        explain_func=quantus.explain,
+                        explain_func_kwargs=explain_func_kwargs,
+                        channel_first=self.channel_first,
+                        softmax=self.softmax,
+                        batch_size=self.bs
+                    )
+                    del metric
+                    if metric_name == "Continuity":
+                        batch_results[metric_name] = self._aggregate_continuity_scores(raw_scores)
+                    elif metric_name == "MPRT" or metric_name == "SmoothMPRT":
+                        batch_results[metric_name] = self._aggregate_MPRT_scores(raw_scores)
+                    else:
+                        batch_results[metric_name] = (np.nanmean([v for v in raw_scores if not np.isnan(v) and not np.isinf(v)]) if isinstance(raw_scores, list) else raw_scores)
+        else:
+            for metric_name, metric in metrics.items():
+                raw_scores = metric(
+                    model=self.quantus_model,
+                    x_batch=x_batch,
+                    y_batch=y_batch,
+                    device=self.device,
+                    explain_func=quantus.explain,
+                    explain_func_kwargs=explain_func_kwargs,
+                    channel_first=self.channel_first,
+                    softmax=self.softmax,
+                    batch_size=self.bs
+                )
+                del metric
+                if metric_name == "Continuity":
+                    batch_results[metric_name] = self._aggregate_continuity_scores(raw_scores)
+                elif metric_name == "MPRT" or metric_name == "SmoothMPRT":
+                    batch_results[metric_name] = self._aggregate_MPRT_scores(raw_scores)
+                else:
+                    batch_results[metric_name] = (np.nanmean([v for v in raw_scores if not np.isnan(v) and not np.isinf(v)]) if isinstance(raw_scores, list) else raw_scores)
+        del raw_scores
+        gc.collect()
+        return batch_results
+    
+    def evaluate(self, start_idx, end_idx, metric_names, xai_method_name, channel_first=True, softmax=False, batch_size=4,quantus_bs=4):
+        """
+        Evaluates a list of Quantus metrics on a batch of samples.
+
+        Args:
+            start_idx (int): Start index of the batch from the data loader.
+            end_idx (int): End index of the batch from the data loader.
+            metric_names (list): List of metric names to evaluate.
+            xai_method_name (str): Name of the XAI method.
+
+        Returns:
+            dict: Aggregated scores for each metric.
+        """
+        self.softmax = softmax
+        self.channel_first = channel_first
+        cache_files = []
+        total_batches = (end_idx - start_idx) // batch_size
+
+        with tqdm(total=total_batches, desc="Evaluating batches", unit="batch") as pbar:
+            for batch_idx, batch_start in enumerate(range(start_idx, end_idx, batch_size)):
+                batch_end = min(batch_start + batch_size, end_idx)
+                x_batch, y_batch = self._prepare_data(batch_start, batch_end)
+
+                if self.framework == "backtrace":
+                    batch_results = self._evaluate_backtrace(self.model,metric_names, xai_method_name, x_batch, y_batch, batch_idx)
+                    cache_file = os.path.join(self.cache_dir, f"dlbacktrace_batch_{batch_idx}_{xai_method_name}.pkl")
+                    with open(cache_file, "wb") as f:
+                        pickle.dump(batch_results, f)
+                    cache_files.append(cache_file)
+                else:
+                    if xai_method_name not in self.xai_methods_config:
+                        raise ValueError(f"XAI method '{xai_method_name}' is not configured.")
+                    if not all(metric in self.metrics_config for metric in metric_names):
+                        raise ValueError("One or more metrics are not configured.")
+                    explain_func_kwargs = self.xai_methods_config[xai_method_name]
+                    metrics = {name: self.metrics_config[name] for name in metric_names}
+                    batch_results = self._compute_metrics(self.model,metrics, x_batch, y_batch, explain_func_kwargs,quantus_bs)
+                    cache_file = os.path.join(self.cache_dir, f"batch_{batch_idx}_{xai_method_name}.pkl")
+                    with open(cache_file, "wb") as f:
+                        pickle.dump(batch_results, f)
+                    cache_files.append(cache_file)
+                
+                del x_batch, y_batch, batch_results
+                gc.collect()
+                pbar.update(1)  # Update progress ba
+
+        return self._aggregate_cached_results(cache_files)
+
 
 class ExplanationMetricsTabular:
     def __init__(self, 
