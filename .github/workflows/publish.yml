@@ -50,7 +50,7 @@ jobs:
           # Slack channel id, channel name, or user id to post message.
           # See also: https://api.slack.com/methods/chat.postMessage#channels
           # You can pass in multiple channels to post to by providing a comma-delimited list of channel IDs.
-          channel-id: "aryaxai-xai-evals-release"
+          channel-id: "aryaxai-xai-evals-releases"
           payload: |
             {
               "text": "AryaXAI xai-evals release",
