@@ -1,11 +1,11 @@
 # xai_evals
-## by - AryaXai
+## by - [AryaXAI](https://www.aryaxai.com/)
 
-**`xai_evals`** is a Python package designed to generate and benchmark various explainability methods for machine learning and deep learning models. It offers tools for creating and evaluating explanations of popular machine learning models, supporting widely-used explanation methods. The package aims to streamline the interpretability of machine learning models, allowing practitioners to gain insights into how their models make predictions. Additionally, it includes several metrics for assessing the quality of these explanations.
+**`xai_evals`** is a Python package designed to generate and benchmark various explainability methods for machine learning and deep learning models. It offers tools for creating and evaluating explanations of popular machine learning models, supporting widely-used explanation methods. The package aims to streamline the interpretability of machine learning models, allowing practitioners to gain insights into how their models make predictions. Additionally, it includes several metrics for assessing the quality of these explanations . [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE) 
 
+Technical Report : [xai_evals : A Framework for Evaluating Post-Hoc Local Explanation Methods](https://arxiv.org/abs/2502.03014)
 
-![Data Type (2)](https://github.com/user-attachments/assets/134a0b43-0cb8-4ed2-b815-c49e8b0c6c7b)
-
+![Overview](/overview.png)
 ---
 
 ## Table of Contents
@@ -35,7 +35,19 @@ To install **`xai_evals`**, you can use `pip`. First, clone the repository or do
 pip install xai_evals
 ```
 
+## Example Notebooks : 
+
+### Tensorflow-Keras : 
+
+| Name        | Dataset        | Link                          |
+|-------------|-------------|-------------------------------|
+| Tabualar ML Models Illustration and Evaluation Metrics | IRIS Dataset | [Colab Link](https://colab.research.google.com/drive/1UoT5Gx5d_L1KQmiirGUyyE1b9ajayO3L?usp=sharing) |
+| Tabular Deep Learning Model Illustration and Evaluation Metrics | Lending Club | [Colab Link](https://colab.research.google.com/drive/17vuRt4D7ph6ZnAbrWMJ2aRum2mk14Tc6?usp=sharing)  |
+| Image Deep Learning Model Illustration and Evaluation Metrics | CIFAR10 | [Colab Link](https://colab.research.google.com/drive/1DNUMT6CNx2VGHsK8qhl3dEEtoN3eA7ar?usp=sharing) |
+
 ## Usage
+
+## Usage : Machine Learning Models
 
 Supported Machine Learning Models for `SHAPExplainer` and `LIMEExplainer` class is as follows : 
 
@@ -131,6 +143,7 @@ For **LIMEExplainer and SHAPExplainer Class** we have several attributes :
 | subset_samples (Only for SHAP) | If we want to use k-means based sampling to use a subset for SHAP Explainer | True/False |
 | subset_number (Only for SHAP)| Number of samples to sample if subset_samples is True | int |
 
+## Usage : Deep Learning Models
 
 ### Torch Tabular Explainer
 
@@ -941,6 +954,21 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 In the future, we will continue to improve this library.
 
-
-
 --- 
+
+## Citations
+This code is free. So, if you use this code anywhere, please cite us:
+```
+@misc{seth2025xaievalsframeworkevaluating,
+      title={xai_evals : A Framework for Evaluating Post-Hoc Local Explanation Methods}, 
+      author={Pratinav Seth and Yashwardhan Rathore and Neeraj Kumar Singh and Chintan Chitroda and Vinay Kumar Sankarapu},
+      year={2025},
+      eprint={2502.03014},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2502.03014}, 
+}
+```
+
+## Get in touch
+Contanct us at [AryaXAI](https://www.aryaxai.com/).
