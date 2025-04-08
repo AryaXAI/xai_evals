@@ -13,3 +13,4 @@ quantus==0.5.3
 tf-explain
 torch
 tqdm
+opencv-python==4.11.0.86
