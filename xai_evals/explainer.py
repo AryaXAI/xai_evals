@@ -516,8 +516,12 @@ class LIMEExplainer:
         """Map LIME's binned features back to original features."""
         original_attributions = []
         for feature, attribution in attributions:
-            if "<=" in feature or "<" in feature or ">" in feature:
-                original_feature = next(word.strip() for word in feature.split() if word.strip() in self.features)
+            if "<=" in feature or "<" in feature or ">" in feature or "=" in feature:
+                if not "<=" in feature and "=" in feature:
+                    feature = feature.split("=")
+                    original_feature = next(word.strip() for word in feature if word.strip() in self.features)
+                else:
+                    original_feature = next(word.strip() for word in feature.split() if word.strip() in self.features)
             else:
                 original_feature = feature
             feature_value = x_instance[original_feature].values[0]

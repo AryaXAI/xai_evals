@@ -625,7 +625,7 @@ class ExplanationMetricsTabular:
             f_x = self._predict(x)[0]
             f_x_pert = self._predict((x + noise))[0]
 
-            predicted_impact = np.dot(g_x, noise)
+            predicted_impact = np.dot(g_x[0], noise[0])
             actual_impact = f_x_pert - f_x
 
             infidelity_scores.append((predicted_impact - actual_impact)**2)
